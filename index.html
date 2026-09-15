@@ -8,6 +8,80 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* ===== Botón de cerrar (X) lindo ===== */
+        .btn-cerrar {
+            position: absolute; top: 14px; right: 14px; z-index: 3;
+            width: 30px; height: 30px;
+            background: transparent; border: none;
+            color: var(--txt-tenue); cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: color 0.22s ease, transform 0.22s ease;
+        }
+        .btn-cerrar:hover { color: var(--rojo); transform: rotate(90deg); }
+        .btn-cerrar:active { transform: rotate(90deg) scale(0.9); }
+        .btn-cerrar svg { width: 20px; height: 20px; }
+        .cerrar-chat { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; cursor:pointer; color:var(--txt-tenue); transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease; }
+        .cerrar-chat:hover { background: var(--rojo); color:#fff; transform: rotate(90deg); }
+
+        .modal-pop > h3:first-child, .modal-pop h3 { padding-right: 34px; }
+        .btn-ruedita { display: flex; align-items: center; justify-content: center; }
+        .btn-ruedita svg { transition: transform 0.4s ease; }
+        .btn-ruedita:hover svg { transform: rotate(90deg); }
+
+        /* ===== Invitación emergente (tipo LoL/FACEIT) ===== */
+        @keyframes entrarInvite {
+            from { opacity: 0; transform: translateX(40px) scale(0.96); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        #zona-invitaciones {
+            position: fixed; top: 18px; right: 18px; z-index: 90;
+            display: flex; flex-direction: column; gap: 10px;
+            max-width: 330px; width: calc(100vw - 36px); pointer-events: none;
+        }
+        #zona-invitaciones > * { pointer-events: auto; }
+        .invite-card {
+            background: linear-gradient(160deg, var(--ficha-sol-a), var(--ficha-sol-b));
+            border: 1px solid var(--linea-suave);
+            border-radius: 5px; overflow: hidden; position: relative;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+            animation: entrarInvite 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            padding: 15px 16px 14px;
+        }
+        .invite-card::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, var(--verde), #5fd3f3);
+        }
+
+        /* ===== Ficha de jugador (sólida, con barrita de color arriba) ===== */
+        .ficha-card {
+            background: linear-gradient(160deg, var(--ficha-sol-a), var(--ficha-sol-b));
+            border: 1px solid var(--linea-suave);
+            border-radius: 5px;
+            padding: 26px 24px 24px;
+            box-shadow: 0 20px 50px var(--velo2), inset 0 1px 0 var(--linea);
+            position: relative;
+            overflow: hidden;
+        }
+        .ficha-card::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, var(--verde), #5fd3f3);
+        }
+        /* Cajita de rango dentro de la ficha */
+        .rango-box {
+            flex: 1; position: relative; overflow: hidden;
+            background: var(--ficha-panel);
+            border: 1px solid var(--linea-suave);
+            border-radius: 4px;
+            padding: 12px 8px 11px;
+            text-align: center;
+        }
+        .rango-box::after {
+            content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+        }
+        .rango-label { font-size: 0.55rem; letter-spacing: 1.4px; color: var(--txt-tenue); text-transform: uppercase; }
+        .rango-nombre { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 1.05rem; line-height: 1; letter-spacing: 0.4px; }
+        .rango-pts { font-size: 0.62rem; color: var(--txt-tenue); margin-top: 3px; }
+
         /* ===== SISTEMA DE TEMAS (oscuro = el de siempre / claro = nuevo) ===== */
         :root {
             --fondo-a: #0a1f10;
@@ -38,7 +112,11 @@
             --modal-b: rgba(10,24,15,0.86);
             --cristal-base: rgba(12,28,18,0.5);
             --ficha-a: #1a3322;
-            --ficha-b: var(--ficha-b);
+            --ficha-b: #2a6b3a;
+            --ficha-sol-a: #1c3524;
+            --ficha-sol-b: #0b1a10;
+            --ficha-panel: #16281c;
+            --borde-punto: #142a1a;
             --aviso-txt: #ffddaa;
             --aviso-bg: rgba(245,158,11,0.08);
         }
@@ -72,6 +150,9 @@
             --cristal-base: rgba(255,255,255,0.62);
             --ficha-a: #cbe8d4;
             --ficha-b: #8fc9a1;
+            --ficha-sol-a: #eaf7ee;
+            --ficha-sol-b: #d3ecda;
+            --ficha-panel: #f4fbf6;
             --borde-punto: #d7efdd;
             --aviso-txt: #7a4a05;
             --aviso-bg: rgba(245,158,11,0.16);
@@ -424,8 +505,12 @@
                     <!-- Lo dibuja el JavaScript -->
                 </div>
 
-                <div onclick="alternarTema()" id="boton-tema" style="display:inline-flex; background:var(--hundido); border:1px solid var(--linea); border-radius:4px; padding:3px; gap:3px; cursor:pointer; margin-top:14px;"></div>
-                <button class="btn btn-secundario" onclick="cerrarSesion()">Cerrar Sesión</button>
+                <div style="display:flex; gap:8px; align-items:stretch;">
+                    <button class="btn btn-secundario" style="flex:1;" onclick="cerrarSesion()">Cerrar Sesión</button>
+                    <button class="btn btn-secundario btn-ruedita" style="width:auto; flex-shrink:0; padding:0 14px;" onclick="abrirConfig()" title="Configuración">
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                </div>
             </div>
 
             <!-- COLUMNA CENTRAL -->
@@ -540,6 +625,14 @@
                         + Amigos y solicitudes <span id="globo-solicitudes" class="oculto" style="background:var(--rojo); color:var(--txt); font-size:0.7rem; padding:1px 7px; border-radius:4px; margin-left:4px;"></span>
                     </div>
 
+                    <!-- Cartel de aviso de mensajes sin leer -->
+                    <div id="aviso-mensajes" class="oculto" style="background:var(--aviso-bg); border:1px solid var(--naranja); border-radius:3px; padding:9px 12px; margin:12px 0; font-size:0.78rem; color:var(--aviso-txt); cursor:pointer;" onclick="abrirBandeja()"></div>
+
+                    <!-- Botón que abre la bandeja de mensajes -->
+                    <div onclick="abrirBandeja()" style="cursor:pointer; margin-top:12px; padding:10px; text-align:center; background:var(--sutil2); border:1px solid var(--linea); border-radius:3px; font-size:0.82rem; color:var(--txt);">
+                        Mensajes <span id="globo-mensajes" class="oculto" style="background:var(--rojo); color:#fff; font-size:0.7rem; padding:1px 7px; border-radius:10px; margin-left:4px;"></span>
+                    </div>
+
                     <h3 style="margin-top:22px; color:var(--naranja);">JUGASTE RECIÉN</h3>
                     <div id="lista-recientes"></div>
                 </div>
@@ -559,7 +652,7 @@
     <!-- VENTANA CREAR EQUIPO -->
     <div id="modal-crear-equipo" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:55; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarCrearEquipo()">
         <div style="position:relative; max-width:420px; width:100%;">
-            <button onclick="cerrarCrearEquipo()" style="position:absolute; top:-46px; right:0; background:var(--velo2); border:1px solid var(--sutil3); border-radius:50%; width:38px; height:38px; color:var(--txt); font-size:1.1rem; cursor:pointer;">✕</button>
+            <button onclick="cerrarCrearEquipo()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             <div class="caja modal-pop">
                 <h3 style="margin-top:0; color:var(--verde); display:flex; align-items:center; gap:9px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--verde)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> Crear equipo</h3>
                 <div class="grupo">
@@ -583,10 +676,51 @@
         </div>
     </div>
 
+    <!-- VENTANA CONFIGURACIÓN -->
+    <div id="modal-config" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:60; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarConfig()">
+        <div style="position:relative; max-width:380px; width:100%;">
+            <button onclick="cerrarConfig()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            <div class="caja modal-pop">
+                <h3 style="margin-top:0; display:flex; align-items:center; gap:9px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--txt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                    Configuración
+                </h3>
+
+                <!-- APARIENCIA -->
+                <div style="font-size:0.6rem; color:var(--txt-tenue); text-transform:uppercase; letter-spacing:1px; margin:18px 0 8px;">Apariencia</div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <span style="font-size:0.85rem; color:var(--txt);">Tema</span>
+                    <div onclick="alternarTema()" id="boton-tema" style="display:inline-flex; background:var(--hundido); border:1px solid var(--linea); border-radius:4px; padding:3px; gap:3px; cursor:pointer;"></div>
+                </div>
+
+                <!-- SONIDO -->
+                <div style="font-size:0.6rem; color:var(--txt-tenue); text-transform:uppercase; letter-spacing:1px; margin:22px 0 8px;">Sonido</div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                    <span style="font-size:0.85rem; color:var(--txt);">Sonidos de la app</span>
+                    <div id="sw-sonido" onclick="alternarSonido()" style="cursor:pointer;"></div>
+                </div>
+                <div id="zona-volumen">
+                    <div style="display:flex; align-items:center; justify-content:space-between; font-size:0.72rem; color:var(--txt-tenue); margin-bottom:4px;">
+                        <span>Volumen</span><span id="valor-volumen">70%</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:9px; margin-bottom:14px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--txt-tenue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/></svg>
+                        <input type="range" id="volumen" min="0" max="100" value="70" oninput="cambiarVolumen(this.value)" style="flex:1;">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--txt-tenue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>
+                    </div>
+                    <div style="font-size:0.6rem; color:var(--txt-tenue); text-transform:uppercase; letter-spacing:1px; margin:14px 0 8px;">¿Qué avisos suenan?</div>
+                    <div id="lista-avisos"></div>
+                </div>
+
+                <p style="font-size:0.66rem; color:var(--txt-tenue); margin:18px 0 0; line-height:1.4;">Tocá los interruptores o movés el volumen para escuchar cómo suena cada uno.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- VENTANA GESTIÓN DE AMIGOS -->
     <div id="modal-amigos" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:58; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarGestionAmigos()">
         <div style="position:relative; max-width:400px; width:100%;">
-            <button onclick="cerrarGestionAmigos()" style="position:absolute; top:-46px; right:0; background:var(--velo2); border:1px solid var(--sutil3); border-radius:50%; width:38px; height:38px; color:var(--txt); font-size:1.1rem; cursor:pointer;">✕</button>
+            <button onclick="cerrarGestionAmigos()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             <div class="caja modal-pop">
                 <h3 style="margin-top:0; display:flex; align-items:center; gap:9px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--txt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg> Amigos y solicitudes</h3>
                 <label>Buscar jugadores</label>
@@ -608,7 +742,7 @@
     <!-- VENTANA CARGAR RESULTADO -->
     <div id="modal-resultado" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:58; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarCargarResultado()">
         <div style="position:relative; max-width:380px; width:100%;">
-            <button onclick="cerrarCargarResultado()" style="position:absolute; top:-46px; right:0; background:var(--velo2); border:1px solid var(--sutil3); border-radius:50%; width:38px; height:38px; color:var(--txt); font-size:1.1rem; cursor:pointer;">✕</button>
+            <button onclick="cerrarCargarResultado()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             <div class="caja modal-pop">
                 <h3 style="margin-top:0; color:var(--verde); display:flex; align-items:center; gap:9px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--verde)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg> Cargar resultado</h3>
                 <div class="grupo">
@@ -661,10 +795,24 @@
     </div>
 
     <!-- CHAT FLOTANTE (abajo a la derecha) -->
-    <div id="chat-flotante" class="oculto" style="position:fixed; bottom:20px; right:20px; width:320px; max-width:calc(100vw - 40px); background:rgba(12,38,26,0.97); border:1px solid var(--sutil3); border-radius:5px; box-shadow:0 14px 40px var(--velo2); z-index:60; overflow:hidden;">
+    <!-- VENTANA BANDEJA DE MENSAJES -->
+    <div id="modal-chats" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:58; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarBandeja()">
+        <div style="position:relative; max-width:380px; width:100%;">
+            <button onclick="cerrarBandeja()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            <div class="caja modal-pop">
+                <h3 style="margin-top:0; display:flex; align-items:center; gap:9px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--txt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+                    Mensajes
+                </h3>
+                <div id="lista-chats" style="margin-top:14px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-flotante" class="oculto" style="position:fixed; bottom:20px; right:20px; width:320px; max-width:calc(100vw - 40px); background:linear-gradient(160deg, var(--modal-a), var(--modal-b)); border:1px solid var(--sutil3); border-radius:5px; box-shadow:0 14px 40px var(--velo2); z-index:60; overflow:hidden;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; background:var(--hundido); border-bottom:1px solid var(--linea-suave);">
             <strong id="chat-flotante-titulo" style="font-family:'Poppins',sans-serif; font-size:1.3rem; color:var(--txt);"></strong>
-            <span onclick="cerrarChat()" style="cursor:pointer; color:var(--txt-tenue); font-size:1.1rem;">✕</span>
+            <span onclick="cerrarChat()" class="cerrar-chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
         </div>
         <div id="chat-flotante-mensajes" style="height:240px; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; font-size:0.85rem;"></div>
         <div style="display:flex; gap:8px; padding:12px; border-top:1px solid var(--linea-suave);">
@@ -674,9 +822,23 @@
     </div>
 
     <!-- VENTANA DE FICHA (estilo FIFA) -->
+    <!-- VENTANA ELEGIR EQUIPO (para invitar a alguien) -->
+    <div id="modal-elegir-equipo" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:62; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarElegirEquipo()">
+        <div style="position:relative; max-width:360px; width:100%;">
+            <div class="caja modal-pop">
+                <button onclick="cerrarElegirEquipo()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <h3 id="elegir-equipo-titulo" style="margin-top:0; font-size:1.1rem;"></h3>
+                <div id="lista-elegir-equipo" style="margin-top:14px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zona donde aparecen las invitaciones emergentes -->
+    <div id="zona-invitaciones"></div>
+
     <div id="modal-mini-perfil" class="oculto" style="position:fixed; inset:0; background:var(--velo); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; z-index:50; padding:64px 20px 30px; overflow-y:auto;" onclick="if(event.target===this)cerrarMiniPerfil()">
         <div style="position:relative; max-width:440px; width:100%;">
-            <button onclick="cerrarMiniPerfil()" style="position:absolute; top:-46px; right:0; background:var(--velo2); border:1px solid var(--sutil3); border-radius:50%; width:38px; height:38px; color:var(--txt); font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
+            <button onclick="cerrarMiniPerfil()" class="btn-cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             <div id="cuerpo-mini-perfil" class="modal-anim"></div>
         </div>
     </div>
@@ -686,7 +848,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-        import { getDatabase, ref, onValue, onDisconnect, set as rtdbSet, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
+        import { getDatabase, ref, onValue, onDisconnect, set as rtdbSet, push as rtdbPush, update as rtdbUpdate, query as rtdbQuery, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyARlGxWVBKdbJ7kxJEPUgZXENk79d9oZZE",
@@ -716,7 +878,7 @@
             doc: doc, setDoc: setDoc, getDoc: getDoc, updateDoc: updateDoc, deleteDoc: deleteDoc, addDoc: addDoc,
             collection: collection, query: query, where: where, getDocs: getDocs,
             // Realtime Database (presencia online/offline)
-            ref: ref, onValue: onValue, onDisconnect: onDisconnect, rtdbSet: rtdbSet, serverTimestamp: serverTimestamp
+            ref: ref, onValue: onValue, onDisconnect: onDisconnect, rtdbSet: rtdbSet, rtdbPush: rtdbPush, rtdbUpdate: rtdbUpdate, rtdbQuery: rtdbQuery, limitToLast: limitToLast, serverTimestamp: serverTimestamp
         };
 
         console.log("✅ Firebase conectado correctamente a Picadito.ar");
@@ -852,16 +1014,23 @@
             if (!window.FB || !window.FB.auth.currentUser) return;
             const uid = window.FB.auth.currentUser.uid;
             try {
-                const consulta = window.FB.query(
-                    window.FB.collection(window.FB.db, "equipos"),
-                    window.FB.where("dueno", "==", uid)
-                );
-                const snap = await window.FB.getDocs(consulta);
+                // Traemos los equipos que son tuyos Y aquellos donde te sumaron
+                const col = window.FB.collection(window.FB.db, "equipos");
+                const consultas = [window.FB.getDocs(window.FB.query(col, window.FB.where("dueno", "==", uid)))];
+                if (usuarioLogueado && usuarioLogueado.apodo) {
+                    consultas.push(window.FB.getDocs(window.FB.query(col, window.FB.where("integrantes", "array-contains", usuarioLogueado.apodo))));
+                }
+                const resultados = await Promise.all(consultas);
                 misEquipos = [];
-                snap.forEach(function(d) {
-                    const eq = d.data();
-                    eq.id = d.id; // guardamos el id para poder borrar/editar
-                    misEquipos.push(eq);
+                const vistos = {};
+                resultados.forEach(function(snap) {
+                    snap.forEach(function(d) {
+                        if (vistos[d.id]) return;   // no repetimos
+                        vistos[d.id] = true;
+                        const eq = d.data();
+                        eq.id = d.id; // guardamos el id para poder borrar/editar
+                        misEquipos.push(eq);
+                    });
                 });
                 dibujarEquipos();
             } catch (e) {
@@ -1181,6 +1350,8 @@
             cargarSolicitudes();
             iniciarPresencia();
             escucharPresencia();
+            escucharMisChats();
+            escucharInvitacionesEquipo();
         }
 
         function dibujarSlots(modo) {
@@ -1222,6 +1393,7 @@
         }
 
         function simularEncuentroRival() {
+            sonar('partido'); // ¡silbato! encontramos rival
             const r = obtenerRango(usuarioLogueado.eloF5);
             const contenedorA = document.getElementById('faceit-equipo-a');
             contenedorA.innerHTML = `
@@ -1250,65 +1422,211 @@
             document.getElementById('vista-login').classList.remove('oculto');
         }
 
-        // ===== CHAT FLOTANTE (por persona o por equipo) =====
-        // Guarda las conversaciones por id ("user:Apodo" o "team:0")
-        const conversaciones = {};
-        let chatActual = null;
+        // ===== CHAT REAL (en vivo, con la Realtime Database) =====
+        let chatActual = null;        // id de la conversación abierta
+        let chatConUid = null;        // con quién estoy hablando
+        let chatConApodo = null;
+        let dejarDeEscucharChat = null; // para cortar la escucha al cerrar
+        let mensajesChat = [];
 
-        function abrirChat(tipo, clave) {
-            const id = tipo + ":" + clave;
-            chatActual = id;
-            let titulo;
-            if (tipo === "user") titulo = clave;
-            else titulo = "Equipo · " + misEquipos[clave].nombre;
-            document.getElementById('chat-flotante-titulo').innerText = titulo;
+        // El id de la conversación: los dos uid ordenados alfabéticamente
+        // (así los dos llegan siempre al mismo id, hablen quien hable primero)
+        function idChat(uidA, uidB) {
+            return [uidA, uidB].sort().join('_');
+        }
 
-            // Si es la primera vez, sembramos un saludo
-            if (!conversaciones[id]) {
-                conversaciones[id] = [];
-                if (tipo === "user") {
-                    conversaciones[id].push({ de: clave, texto: "Eh genio! Todo bien?" });
-                } else {
-                    conversaciones[id].push({ de: "Sistema", texto: "Chat del equipo " + misEquipos[clave].nombre });
-                }
-            }
-            pintarChatFlotante();
+        function abrirChatCon(uid, apodo) {
+            if (!window.FB || !window.FB.auth.currentUser) { alert("No detectamos tu sesión."); return; }
+            const miUid = window.FB.auth.currentUser.uid;
+            if (uid === miUid) { alert("No podés chatear con vos mismo 😅"); return; }
+
+            chatConUid = uid;
+            chatConApodo = apodo;
+            chatActual = idChat(miUid, uid);
+            document.getElementById('chat-flotante-titulo').innerText = apodo;
+            document.getElementById('chat-flotante-mensajes').innerHTML =
+                '<div style="color:var(--txt-tenue); font-size:0.76rem; text-align:center; padding:12px;">Cargando…</div>';
             document.getElementById('chat-flotante').classList.remove('oculto');
             document.getElementById('chat-flotante-input').focus();
+            escucharChat(chatActual);
+        }
+
+        // Nos quedamos "escuchando" la conversación: si llega un mensaje, aparece solo
+        function escucharChat(id) {
+            if (dejarDeEscucharChat) { dejarDeEscucharChat(); dejarDeEscucharChat = null; }
+            const refe = window.FB.rtdbQuery(
+                window.FB.ref(window.FB.rtdb, 'chats/' + id),
+                window.FB.limitToLast(100)
+            );
+            const miUid = window.FB.auth.currentUser.uid;
+            let primeraVez = true;
+            dejarDeEscucharChat = window.FB.onValue(refe, function(snap) {
+                const datos = snap.val() || {};
+                const antes = mensajesChat.length;
+                mensajesChat = Object.keys(datos).map(function(k){ return datos[k]; });
+                mensajesChat.sort(function(a,b){ return (a.ts||0) - (b.ts||0); });
+                pintarChatFlotante();
+                // Si llegó un mensaje nuevo del otro, suena
+                const ultimo = mensajesChat[mensajesChat.length - 1];
+                if (!primeraVez && mensajesChat.length > antes && ultimo && ultimo.de !== miUid) {
+                    sonar('mensaje');
+                }
+                primeraVez = false;
+                marcarChatLeido(id);
+            });
+        }
+
+        function marcarChatLeido(id) {
+            if (!window.FB || !window.FB.auth.currentUser) return;
+            const miUid = window.FB.auth.currentUser.uid;
+            try {
+                window.FB.rtdbSet(window.FB.ref(window.FB.rtdb, 'lecturas/' + miUid + '/' + id), Date.now());
+            } catch (e) {}
         }
 
         function pintarChatFlotante() {
             const caja = document.getElementById('chat-flotante-mensajes');
+            const miUid = window.FB && window.FB.auth.currentUser ? window.FB.auth.currentUser.uid : null;
+            if (mensajesChat.length === 0) {
+                caja.innerHTML = '<div style="color:var(--txt-tenue); font-size:0.76rem; text-align:center; padding:12px;">Todavía no hay mensajes. ¡Escribile!</div>';
+                return;
+            }
             caja.innerHTML = "";
-            conversaciones[chatActual].forEach(function(m) {
-                if (m.de === "Vos") {
-                    caja.innerHTML += '<div style="align-self:flex-end; background:var(--verde); color:var(--verde-osc); padding:8px 12px; border-radius:4px; max-width:85%;">' + m.texto + '</div>';
+            mensajesChat.forEach(function(m) {
+                const texto = escaparTexto(m.texto || "");
+                if (m.de === miUid) {
+                    caja.innerHTML += '<div style="align-self:flex-end; background:var(--verde); color:var(--verde-osc); padding:8px 12px; border-radius:4px; max-width:85%; word-break:break-word;">' + texto + '</div>';
                 } else {
-                    caja.innerHTML += '<div style="align-self:flex-start; background:var(--linea-suave); color:var(--txt-suave); padding:8px 12px; border-radius:4px; max-width:85%;"><strong style="color:var(--verde); font-size:0.7rem;">' + m.de + '</strong><br>' + m.texto + '</div>';
+                    caja.innerHTML += '<div style="align-self:flex-start; background:var(--linea-suave); color:var(--txt-suave); padding:8px 12px; border-radius:4px; max-width:85%; word-break:break-word;"><strong style="color:var(--verde); font-size:0.7rem;">' + escaparTexto(m.apodo || "") + '</strong><br>' + texto + '</div>';
                 }
             });
             caja.scrollTop = caja.scrollHeight;
         }
 
-        function enviarMensajeFlotante() {
+        // Evita que alguien escriba código en el chat
+        function escaparTexto(t) {
+            const d = document.createElement('div');
+            d.innerText = t;
+            return d.innerHTML;
+        }
+
+        async function enviarMensajeFlotante() {
             const input = document.getElementById('chat-flotante-input');
             const texto = input.value.trim();
             if (texto === "" || !chatActual) return;
-            conversaciones[chatActual].push({ de: "Vos", texto: texto });
+            if (texto.length > 500) { alert("El mensaje es muy largo (máximo 500 caracteres)."); return; }
+            if (!window.FB || !window.FB.auth.currentUser) return;
+            const miUid = window.FB.auth.currentUser.uid;
             input.value = "";
-            pintarChatFlotante();
+            const ahora = Date.now();
+            const msg = { de: miUid, apodo: usuarioLogueado.apodo, texto: texto, ts: ahora };
+            try {
+                await window.FB.rtdbPush(window.FB.ref(window.FB.rtdb, 'chats/' + chatActual), msg);
+                // Guardamos la conversación en la lista de los dos (para la bandeja y el globito)
+                const resumen = { conApodo: '', conUid: '', ultimoTexto: texto.substring(0,60), ultimoTs: ahora, ultimoDe: miUid };
+                const paraMi = Object.assign({}, resumen, { conUid: chatConUid, conApodo: chatConApodo });
+                const paraEl = Object.assign({}, resumen, { conUid: miUid, conApodo: usuarioLogueado.apodo });
+                window.FB.rtdbSet(window.FB.ref(window.FB.rtdb, 'misChats/' + miUid + '/' + chatActual), paraMi);
+                window.FB.rtdbSet(window.FB.ref(window.FB.rtdb, 'misChats/' + chatConUid + '/' + chatActual), paraEl);
+            } catch (e) {
+                alert("No se pudo enviar el mensaje: " + e.message);
+                console.error(e);
+            }
+        }
 
-            // Respuesta automática (de mentira)
-            const quien = chatActual.split(":")[0] === "user" ? chatActual.split(":")[1] : "Compañero";
-            const respuestas = ["Dale, cerramos!", "Joya, ahí estamos 👊", "Apostamos algo?", "Paso la cancha y vamos", "Jaja de una"];
-            const r = respuestas[Math.floor(Math.random() * respuestas.length)];
-            setTimeout(function() {
-                conversaciones[chatActual].push({ de: quien, texto: r });
-                pintarChatFlotante();
-            }, 800);
+        // El chat de equipo (grupal) es distinto al chat de a dos: lo hacemos aparte
+        function avisoChatEquipo() {
+            alert("El chat de equipo (grupal) está en camino.\n\nPor ahora podés chatear de a dos: tocá a cualquier jugador y usá el botón Chatear.");
+        }
+
+        // ===== MENSAJES SIN LEER (el globito) =====
+        let misChats = {};      // resumen de todas mis conversaciones
+        let misLecturas = {};   // cuándo leí cada una por última vez
+
+        function escucharMisChats() {
+            if (!window.FB || !window.FB.auth.currentUser) return;
+            const miUid = window.FB.auth.currentUser.uid;
+            // Mis conversaciones
+            window.FB.onValue(window.FB.ref(window.FB.rtdb, 'misChats/' + miUid), function(snap) {
+                misChats = snap.val() || {};
+                pintarNoLeidos();
+            });
+            // Cuándo leí cada una
+            window.FB.onValue(window.FB.ref(window.FB.rtdb, 'lecturas/' + miUid), function(snap) {
+                misLecturas = snap.val() || {};
+                pintarNoLeidos();
+            });
+        }
+
+        // Cuenta las conversaciones con mensajes que todavía no leí
+        function contarNoLeidos() {
+            const miUid = window.FB && window.FB.auth.currentUser ? window.FB.auth.currentUser.uid : null;
+            if (!miUid) return 0;
+            let n = 0;
+            Object.keys(misChats).forEach(function(id) {
+                const c = misChats[id];
+                if (!c || c.ultimoDe === miUid) return;      // si el último lo mandé yo, está leído
+                const leido = misLecturas[id] || 0;
+                if ((c.ultimoTs || 0) > leido) n++;
+            });
+            return n;
+        }
+
+        function pintarNoLeidos() {
+            const n = contarNoLeidos();
+            const globo = document.getElementById('globo-mensajes');
+            const cartel = document.getElementById('aviso-mensajes');
+            if (!globo) return;
+            if (n > 0) {
+                globo.innerText = n;
+                globo.classList.remove('oculto');
+                cartel.innerHTML = '<span style="display:inline-flex; align-items:center; gap:6px;">' + icono('chat', 'var(--aviso-txt)', 15) + ' Tenés ' + n + ' chat' + (n > 1 ? 's' : '') + ' sin leer</span>';
+                cartel.classList.remove('oculto');
+            } else {
+                globo.classList.add('oculto');
+                cartel.classList.add('oculto');
+            }
+            pintarBandeja();
+        }
+
+        // La bandeja: la lista de tus conversaciones
+        function pintarBandeja() {
+            const cont = document.getElementById('lista-chats');
+            if (!cont) return;
+            const miUid = window.FB && window.FB.auth.currentUser ? window.FB.auth.currentUser.uid : null;
+            const ids = Object.keys(misChats).sort(function(a, b) {
+                return (misChats[b].ultimoTs || 0) - (misChats[a].ultimoTs || 0);
+            });
+            if (ids.length === 0) {
+                cont.innerHTML = '<p style="font-size:0.76rem; color:var(--txt-tenue);">Todavía no tenés conversaciones. Tocá a un jugador y escribile.</p>';
+                return;
+            }
+            cont.innerHTML = ids.map(function(id) {
+                const c = misChats[id];
+                const sinLeer = c.ultimoDe !== miUid && (c.ultimoTs || 0) > (misLecturas[id] || 0);
+                const j = jugadores[c.conApodo];
+                const punto = sinLeer ? '<div style="width:9px; height:9px; border-radius:50%; background:var(--verde); flex-shrink:0;"></div>' : '';
+                return '<div onclick="abrirChatCon(\'' + c.conUid + '\',\'' + c.conApodo + '\'); cerrarBandeja();" style="display:flex; align-items:center; gap:10px; padding:9px; border-radius:4px; background:' + (sinLeer ? 'var(--sutil2)' : 'var(--sutil)') + '; margin-bottom:6px; cursor:pointer;">' +
+                    '<div style="width:34px; height:34px; border-radius:50%; overflow:hidden; border:2px solid var(--verde); display:flex; align-items:center; justify-content:center; background:var(--hundido); flex-shrink:0;">' + avatarHTML(j ? j.foto : "") + '</div>' +
+                    '<div style="flex:1; min-width:0;">' +
+                        '<div style="color:var(--txt); font-size:0.83rem; font-weight:' + (sinLeer ? '700' : '600') + ';">' + escaparTexto(c.conApodo || '') + '</div>' +
+                        '<div style="font-size:0.68rem; color:var(--txt-tenue); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (c.ultimoDe === miUid ? 'Vos: ' : '') + escaparTexto(c.ultimoTexto || '') + '</div>' +
+                    '</div>' + punto +
+                '</div>';
+            }).join('');
+        }
+
+        function abrirBandeja() {
+            pintarBandeja();
+            document.getElementById('modal-chats').classList.remove('oculto');
+        }
+        function cerrarBandeja() {
+            document.getElementById('modal-chats').classList.add('oculto');
         }
 
         function cerrarChat() {
+            if (dejarDeEscucharChat) { dejarDeEscucharChat(); dejarDeEscucharChat = null; }
+            chatActual = null; mensajesChat = [];
             document.getElementById('chat-flotante').classList.add('oculto');
         }
 
@@ -1333,6 +1651,8 @@
         function tarjetaEquipo(eq, i) {
             const elo = eloPromedioEquipo(eq.integrantes);
             const r = obtenerRango(elo);
+            const miUid = window.FB && window.FB.auth.currentUser ? window.FB.auth.currentUser.uid : null;
+            const esMiEquipo = (eq.dueno === miUid);
             const estrella = eq.destacado
                 ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="var(--naranja)" stroke="var(--naranja)" stroke-width="1.5" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
                 : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--txt-tenue)" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
@@ -1346,8 +1666,8 @@
                         '<div onclick="destacarEquipo(' + i + ')" title="Destacar" style="cursor:pointer; display:flex;">' + estrella + '</div>' +
                     '</div>' +
                     '<div style="display:flex; gap:8px; margin-top:10px;">' +
-                        '<button class="btn" style="margin-top:0; padding:8px; font-size:0.72rem; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="abrirChat(\'team\',' + i + ')">' + icono('chat', 'var(--verde-osc)', 15) + ' Chat de equipo</button>' +
-                        '<button class="btn btn-secundario" style="margin-top:0; padding:8px; font-size:0.72rem; display:flex; align-items:center; justify-content:center;" onclick="eliminarEquipo(' + i + ')">' + icono('basura', 'var(--rojo)', 15) + '</button>' +
+                        '<button class="btn" style="margin-top:0; padding:8px; font-size:0.72rem; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="avisoChatEquipo()">' + icono('chat', 'var(--verde-osc)', 15) + ' Chat de equipo</button>' +
+                        (esMiEquipo ? '<button class="btn btn-secundario" style="margin-top:0; padding:8px; font-size:0.72rem; display:flex; align-items:center; justify-content:center;" onclick="eliminarEquipo(' + i + ')">' + icono('basura', 'var(--rojo)', 15) + '</button>' : '') +
                     '</div>' +
                 '</div>';
         }
@@ -1458,14 +1778,13 @@
         }
 
         function confirmarRecorte() {
-            const S = 240; // diámetro del círculo de recorte
+            const S = 240; // tamaño final de la imagen
             const out = document.createElement('canvas');
             out.width = S; out.height = S;
             const ctx = out.getContext('2d');
-            ctx.beginPath();
-            ctx.arc(S/2, S/2, S/2, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.clip();
+            // Fondo (JPEG no admite transparencia; igual el círculo lo hace el diseño)
+            ctx.fillStyle = '#0c2614';
+            ctx.fillRect(0, 0, S, S);
             const zoom = parseFloat(document.getElementById('recortar-zoom').value);
             const escala = recBaseScale * zoom;
             const dW = recImg.width * escala, dH = recImg.height * escala;
@@ -1473,7 +1792,8 @@
             const dX = (REC_LADO - dW) / 2 + recOffsetX - 10;
             const dY = (REC_LADO - dH) / 2 + recOffsetY - 10;
             ctx.drawImage(recImg, dX, dY, dW, dH);
-            const resultado = out.toDataURL('image/png');
+            // JPEG: pesa ~10 veces menos que PNG y a este tamaño se ve igual
+            const resultado = out.toDataURL('image/jpeg', 0.82);
             if (recCallback) recCallback(resultado);
             cerrarRecortar();
         }
@@ -1853,7 +2173,7 @@
             let menuPuntitos = "";
             if (!esYo) {
                 menuPuntitos =
-                    '<div style="position:absolute; top:14px; right:16px; z-index:6;">' +
+                    '<div style="position:absolute; top:16px; right:52px; z-index:6;">' +
                         '<div onclick="toggleMenuFicha(event)" style="color:var(--txt); font-size:1.5rem; cursor:pointer; line-height:0.4; letter-spacing:2px; padding:0 4px;">⋮</div>' +
                         '<div class="menu-ficha oculto" style="position:absolute; top:28px; right:0; background:var(--modal-b); border:1px solid var(--sutil3); border-radius:3px; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,0.5); white-space:nowrap;">' +
                             '<div onclick="alert(\'Eliminaste a ' + p.apodo + ' (ejemplo)\'); cerrarMiniPerfil();" style="display:flex; align-items:center; gap:8px; padding:9px 18px; font-size:0.8rem; color:var(--txt); border-bottom:1px solid var(--linea-suave); cursor:pointer;">' + icono('basura', 'var(--txt)', 14) + ' Eliminar</div>' +
@@ -1872,37 +2192,66 @@
                     '</div>' +
                     '<button class="btn" style="margin-top:14px; display:flex; align-items:center; justify-content:center; gap:7px;" onclick="editarMiFicha()">' + icono('lapiz', 'var(--verde-osc)', 15) + ' Editar mi ficha</button>';
             } else {
-                const botonPrincipal = esAmigo(p.apodo)
-                    ? '<button class="btn" style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="chatearCon(\'' + p.apodo + '\')">' + icono('chat', 'var(--verde-osc)', 15) + ' Chatear</button>'
-                    : '<button class="btn" style="margin-top:0;" onclick="enviarSolicitud(\'' + p.apodo + '\')">+ Enviar solicitud</button>';
-                bloqueAbajo =
-                    '<div style="display:flex; gap:10px; margin-top:16px;">' +
-                        botonPrincipal +
-                        '<button class="btn" style="margin-top:0; background:var(--naranja);" onclick="invitarAlGrupo(\'' + p.apodo + '\')">Invitar a jugar</button>' +
+                if (esAmigo(p.apodo)) {
+                    // Ya son amigos: 3 acciones
+                    bloqueAbajo =
+                        '<div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">' +
+                            '<button class="btn" style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:7px;" onclick="chatearCon(\'' + p.apodo + '\')">' + icono('chat', 'var(--verde-osc)', 15) + ' Enviar mensaje</button>' +
+                            '<div style="display:flex; gap:8px;">' +
+                                '<button class="btn btn-secundario" style="margin-top:0; font-size:0.8rem;" onclick="agregarAGrupo(\'' + p.apodo + '\')">+ Agregar a grupo</button>' +
+                                '<button class="btn" style="margin-top:0; background:var(--naranja); font-size:0.8rem;" onclick="invitarAlGrupo(\'' + p.apodo + '\')">Invitar a jugar</button>' +
+                            '</div>' +
+                        '</div>';
+                } else {
+                    // Todavía no son amigos: solo mandar solicitud
+                    bloqueAbajo =
+                        '<button class="btn" style="margin-top:16px;" onclick="enviarSolicitud(\'' + p.apodo + '\')">+ Enviar solicitud</button>';
+                }
+            }
+
+            // Dibuja una cajita de rango (Fútbol 5 / Fútbol 7)
+            function cajaRango(etiqueta, r, pts) {
+                return '<div class="rango-box" style="--c:' + r.color + '">' +
+                        '<div class="rango-label">' + etiqueta + '</div>' +
+                        '<div class="insignia-' + r.nombre.toLowerCase() + '" style="width:44px; height:52px; margin:7px auto 6px; background-size:contain; background-position:center; background-repeat:no-repeat;"></div>' +
+                        '<div class="rango-nombre" style="color:' + r.color + ';">' + r.nombre.toUpperCase() + '</div>' +
+                        '<div class="rango-pts">' + pts + ' pts</div>' +
+                        '<div style="position:absolute; left:0; right:0; bottom:0; height:3px; background:' + r.color + ';"></div>' +
                     '</div>';
             }
 
-            return '<div style="background:linear-gradient(160deg, var(--ficha-a) 0%, var(--fondo-a) 55%, var(--ficha-b) 130%); border:2px solid var(--naranja); border-radius:5px; padding:24px; box-shadow:0 14px 34px rgba(0,0,0,0.55); position:relative;">' +
+            return '<div class="ficha-card">' +
                 menuPuntitos +
-                '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
-                    '<div>' +
-                        '<div style="font-family:\'Poppins\',sans-serif; font-size:3rem; color:var(--naranja); line-height:0.85;">' + p.eloF5 + '</div>' +
-                        '<div style="font-family:\'Poppins\',sans-serif; font-size:1.2rem; color:var(--txt); line-height:1;">' + abreviarPosicion(p.posicion) + '</div>' +
-                        '<div style="font-family:\'Poppins\',sans-serif; font-size:1rem; color:var(--txt-suave); line-height:1;">' + pierna.toUpperCase() + '</div>' +
+                // Encabezado: foto + apodo + posición
+                '<div style="display:flex; align-items:center; gap:15px; margin-bottom:16px;">' +
+                    '<div style="width:78px; height:78px; border-radius:50%; border:2px solid ' + rF5.color + '; overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--hundido); flex-shrink:0;">' + avatarHTML(p.foto) + '</div>' +
+                    '<div style="min-width:0; flex:1;">' +
+                        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+                            '<span style="font-family:\'Poppins\',sans-serif; font-weight:700; font-size:1.5rem; color:var(--txt); text-transform:uppercase; line-height:1.05; word-break:break-word;">' + p.apodo + '</span>' +
+                            (!esYo && esAmigo(p.apodo)
+                                ? '<span title="Ya son amigos" style="display:inline-flex; align-items:center; gap:4px; font-size:0.62rem; color:var(--verde); border:1px solid var(--verde); border-radius:20px; padding:2px 8px; white-space:nowrap;">' + icono('check', 'var(--verde)', 11) + ' Amigos</span>'
+                                : '') +
+                        '</div>' +
+                        '<div style="font-size:0.72rem; color:var(--txt-tenue); margin-top:4px;">' + abreviarPosicion(p.posicion) + ' · Pierna ' + pierna.toLowerCase() + '</div>' +
                     '</div>' +
-                    '<div style="width:96px; height:96px; border-radius:50%; border:3px solid ' + rF5.color + '; overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--hundido); flex-shrink:0;">' + avatarHTML(p.foto) + '</div>' +
                 '</div>' +
-                '<div style="font-family:\'Poppins\',sans-serif; font-size:2.7rem; color:var(--txt); text-transform:uppercase; line-height:1; border-bottom:1px solid var(--sutil3); padding-bottom:8px; margin-bottom:14px;">' + p.apodo + '</div>' +
-                '<div style="display:flex; gap:10px; margin-bottom:16px;">' +
-                    '<div style="flex:1; background:' + rF5.color + '22; border:1px solid ' + rF5.color + '; border-radius:3px; padding:9px; text-align:center;"><div style="font-size:0.58rem; color:var(--txt-suave);">FÚTBOL 5</div><div class="insignia-' + rF5.nombre.toLowerCase() + '" style="width:46px; height:54px; margin:5px auto 3px; background-size:contain; background-position:center; background-repeat:no-repeat;"></div><div style="font-family:\'Poppins\',sans-serif; color:' + rF5.color + '; font-size:1.4rem; line-height:1;">' + rF5.nombre + '</div></div>' +
-                    '<div style="flex:1; background:' + rF7.color + '22; border:1px solid ' + rF7.color + '; border-radius:3px; padding:9px; text-align:center;"><div style="font-size:0.58rem; color:var(--txt-suave);">FÚTBOL 7</div><div class="insignia-' + rF7.nombre.toLowerCase() + '" style="width:46px; height:54px; margin:5px auto 3px; background-size:contain; background-position:center; background-repeat:no-repeat;"></div><div style="font-family:\'Poppins\',sans-serif; color:' + rF7.color + '; font-size:1.4rem; line-height:1;">' + rF7.nombre + '</div></div>' +
+
+                // Los dos rangos
+                '<div style="display:flex; gap:10px; margin-bottom:12px;">' +
+                    cajaRango('Fútbol 5', rF5, p.eloF5) +
+                    cajaRango('Fútbol 7', rF7, p.eloF7) +
                 '</div>' +
-                '<div style="display:flex; justify-content:space-around; text-align:center; background:rgba(0,0,0,0.25); border-radius:3px; padding:11px;">' +
-                    '<div><div style="font-family:\'Poppins\',sans-serif; font-size:1.6rem; color:var(--txt);">' + jugados + '</div><div style="font-size:0.54rem; color:var(--txt-tenue);">JUGADOS</div></div>' +
-                    '<div><div style="font-family:\'Poppins\',sans-serif; font-size:1.6rem; color:var(--verde);">' + ganados + '</div><div style="font-size:0.54rem; color:var(--txt-tenue);">GANADOS</div></div>' +
-                    '<div><div style="font-family:\'Poppins\',sans-serif; font-size:1.6rem; color:var(--naranja); display:flex; align-items:center; justify-content:center; gap:3px;">' + icono('fuego', 'var(--naranja)', 15) + racha + '</div><div style="font-size:0.54rem; color:var(--txt-tenue);">RACHA</div></div>' +
+
+                // Estadísticas
+                '<div style="display:flex; background:var(--ficha-panel); border:1px solid var(--linea-suave); border-radius:4px; padding:12px 0; text-align:center;">' +
+                    '<div style="flex:1;"><div style="font-family:\'Poppins\',sans-serif; font-weight:700; font-size:1.3rem; color:var(--txt); line-height:1;">' + jugados + '</div><div style="font-size:0.55rem; letter-spacing:1px; color:var(--txt-tenue); margin-top:4px;">JUGADOS</div></div>' +
+                    '<div style="width:1px; background:var(--linea-suave);"></div>' +
+                    '<div style="flex:1;"><div style="font-family:\'Poppins\',sans-serif; font-weight:700; font-size:1.3rem; color:var(--verde); line-height:1;">' + ganados + '</div><div style="font-size:0.55rem; letter-spacing:1px; color:var(--txt-tenue); margin-top:4px;">GANADOS</div></div>' +
+                    '<div style="width:1px; background:var(--linea-suave);"></div>' +
+                    '<div style="flex:1;"><div style="font-family:\'Poppins\',sans-serif; font-weight:700; font-size:1.3rem; color:var(--naranja); line-height:1; display:flex; align-items:center; justify-content:center; gap:3px;">' + icono('fuego', 'var(--naranja)', 14) + racha + '</div><div style="font-size:0.55rem; letter-spacing:1px; color:var(--txt-tenue); margin-top:4px;">RACHA</div></div>' +
                 '</div>' +
-                '<div style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:0.64rem; color:var(--txt-tenue); margin-top:14px;">' + icono('pin', 'var(--txt-tenue)', 13) + ' ' + p.ciudad + ' · Pierna ' + pierna.toLowerCase() + '</div>' +
+
+                '<div style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:0.66rem; color:var(--txt-tenue); margin-top:13px;">' + icono('pin', 'var(--txt-tenue)', 13) + ' ' + p.ciudad + '</div>' +
                 bloqueAbajo +
             '</div>';
         }
@@ -2008,6 +2357,9 @@
             else alert("No se pudo identificar a ese jugador.");
         }
 
+        // Cuántas solicitudes teníamos la vez anterior (para saber si llegó una nueva)
+        let solicitudesPrevias = null;
+
         async function cargarSolicitudes() {
             if (!window.FB || !window.FB.auth.currentUser) return;
             const miUid = window.FB.auth.currentUser.uid;
@@ -2024,7 +2376,7 @@
                     html += '<div style="background:var(--aviso-bg); border:1px solid rgba(245,158,11,0.35); border-radius:4px; padding:9px; display:flex; align-items:center; gap:10px; margin-bottom:6px;">' +
                         '<div style="flex:1; min-width:0;"><div style="color:var(--txt); font-weight:600; font-size:0.85rem;">' + s.de_apodo + '</div><div style="font-size:0.64rem; color:var(--txt-tenue);">te mandó solicitud</div></div>' +
                         '<button class="btn" style="margin-top:0; width:auto; padding:7px 10px; font-size:0.72rem;" onclick="aceptarSolicitud(\'' + d.id + '\',\'' + s.de_uid + '\',\'' + s.de_apodo + '\')">✓</button>' +
-                        '<button class="btn" style="margin-top:0; width:auto; padding:7px 10px; font-size:0.72rem; background:var(--rojo); color:var(--txt);" onclick="rechazarSolicitud(\'' + d.id + '\')">✕</button>' +
+                        '<button class="btn" style="margin-top:0; width:auto; padding:7px 10px; font-size:0.72rem; background:var(--rojo); color:#fff; display:flex; align-items:center;" onclick="rechazarSolicitud(\'' + d.id + '\')">' + icono('cruz', '#fff', 15) + '</button>' +
                     '</div>';
                 });
                 const cont = document.getElementById('lista-solicitudes');
@@ -2032,6 +2384,9 @@
 
                 const globo = document.getElementById('globo-solicitudes');
                 const aviso = document.getElementById('aviso-solicitudes');
+                // Si llegó una solicitud NUEVA (y no es la primera carga), suena
+                if (solicitudesPrevias !== null && cuenta > solicitudesPrevias) sonar('invitacion');
+                solicitudesPrevias = cuenta;
                 if (cuenta > 0) {
                     globo.innerText = cuenta; globo.classList.remove('oculto');
                     aviso.innerHTML = '<span style="display:inline-flex; align-items:center; gap:6px;">' + icono('campana', 'var(--aviso-txt)', 15) + ' ¡Tenés ' + cuenta + ' solicitud' + (cuenta > 1 ? 'es' : '') + ' de amistad!</span>';
@@ -2111,8 +2466,8 @@
             };
 
             document.getElementById('cuerpo-mini-perfil').innerHTML =
-                '<div style="background:linear-gradient(160deg, var(--ficha-a) 0%, var(--fondo-a) 55%, var(--ficha-b) 130%); border:2px solid var(--naranja); border-radius:5px; padding:24px;">' +
-                    '<div style="font-family:\'Poppins\',sans-serif; font-size:1.8rem; color:var(--naranja); text-transform:uppercase; margin-bottom:16px;">✎ Editando mi ficha</div>' +
+                '<div class="ficha-card">' +
+                    '<div style="display:flex; align-items:center; gap:9px; font-family:\'Poppins\',sans-serif; font-weight:700; font-size:1.3rem; color:var(--txt); text-transform:uppercase; margin-bottom:18px;">' + icono('lapiz', 'var(--verde)', 18) + ' Editando mi ficha</div>' +
 
                     // Foto (con arrastrar y soltar)
                     '<div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">' +
@@ -2251,7 +2606,10 @@
             else a = jugadores[apodo];
             if (!a) return;
 
-            const esYo = (usuarioLogueado && apodo === usuarioLogueado.apodo);
+            const miUid = window.FB && window.FB.auth.currentUser ? window.FB.auth.currentUser.uid : null;
+            const esYo = (miUid && a.uid && a.uid === miUid) ||
+                         (usuarioLogueado && apodo && usuarioLogueado.apodo &&
+                          apodo.toLowerCase() === usuarioLogueado.apodo.toLowerCase());
             document.getElementById('cuerpo-mini-perfil').innerHTML = fichaFifaHTML(a, esYo);
             document.getElementById('modal-mini-perfil').classList.remove('oculto');
         }
@@ -2260,9 +2618,164 @@
             document.getElementById('modal-mini-perfil').classList.add('oculto');
         }
 
-        function chatearCon(apodo) {
+        // ===== INVITAR A UN EQUIPO (con invitación emergente) =====
+
+        // Paso 1: elegir a cuál de tus equipos lo querés sumar
+        function agregarAGrupo(apodo) {
+            const j = jugadores[apodo];
+            if (!j || !j.uid) { alert("No se pudo identificar a ese jugador."); return; }
+            if (misEquipos.length === 0) {
+                alert("Todavía no tenés ningún equipo.\n\nCreá uno primero con el botón \"+ Crear equipo\".");
+                return;
+            }
+            // Equipos donde todavía NO está y que no estén llenos
+            const posibles = misEquipos.filter(function(e) {
+                return e.integrantes.indexOf(apodo) === -1 && e.integrantes.length < 7;
+            });
+            if (posibles.length === 0) {
+                alert(apodo + " ya está en todos tus equipos (o están completos).");
+                return;
+            }
+            document.getElementById('elegir-equipo-titulo').innerText = "¿A qué equipo sumás a " + apodo + "?";
+            document.getElementById('lista-elegir-equipo').innerHTML = posibles.map(function(e) {
+                const idx = misEquipos.indexOf(e);
+                return '<div onclick="enviarInvitacionEquipo(' + idx + ', \'' + apodo + '\')" style="display:flex; align-items:center; gap:11px; padding:11px; border-radius:4px; background:var(--sutil2); border:1px solid var(--linea-suave); margin-bottom:8px; cursor:pointer;">' +
+                        '<div style="flex-shrink:0;">' + escudoHTML(e.escudo, 30) + '</div>' +
+                        '<div style="flex:1; min-width:0;">' +
+                            '<div style="color:var(--txt); font-size:0.9rem; font-weight:600;">' + escaparTexto(e.nombre) + '</div>' +
+                            '<div style="font-size:0.66rem; color:var(--txt-tenue);">' + e.integrantes.length + ' de 7 jugadores</div>' +
+                        '</div>' +
+                    '</div>';
+            }).join('');
+            document.getElementById('modal-elegir-equipo').classList.remove('oculto');
+        }
+
+        function cerrarElegirEquipo() {
+            document.getElementById('modal-elegir-equipo').classList.add('oculto');
+        }
+
+        // Paso 2: mandar la invitación (le llega en vivo al otro)
+        async function enviarInvitacionEquipo(idx, apodo) {
+            const eq = misEquipos[idx];
+            const j = jugadores[apodo];
+            if (!eq || !j || !j.uid) { alert("No se pudo enviar la invitación."); return; }
+            if (!window.FB || !window.FB.auth.currentUser) { alert("No detectamos tu sesión."); return; }
+            cerrarElegirEquipo();
             cerrarMiniPerfil();
-            abrirChat("user", apodo);
+            try {
+                await window.FB.rtdbPush(window.FB.ref(window.FB.rtdb, 'invitacionesEquipo/' + j.uid), {
+                    deUid: window.FB.auth.currentUser.uid,
+                    deApodo: usuarioLogueado.apodo,
+                    equipoId: eq.id,
+                    equipoNombre: eq.nombre,
+                    escudo: eq.escudo,
+                    ts: Date.now()
+                });
+                alert("¡Invitación enviada a " + apodo + "!");
+            } catch (e) {
+                alert("No se pudo enviar la invitación: " + e.message);
+                console.error(e);
+            }
+        }
+
+        // Paso 3: escuchar si a MÍ me invitan (aparece el cartel emergente)
+        let invitacionesVistas = {};
+        function escucharInvitacionesEquipo() {
+            if (!window.FB || !window.FB.auth.currentUser) return;
+            const miUid = window.FB.auth.currentUser.uid;
+            window.FB.onValue(window.FB.ref(window.FB.rtdb, 'invitacionesEquipo/' + miUid), function(snap) {
+                const datos = snap.val() || {};
+                Object.keys(datos).forEach(function(clave) {
+                    if (invitacionesVistas[clave]) return;   // ya la mostramos
+                    invitacionesVistas[clave] = true;
+                    mostrarInvitacionEquipo(clave, datos[clave]);
+                    sonar('invitacion');
+                });
+                // Si alguna desapareció, sacamos su cartel
+                Object.keys(invitacionesVistas).forEach(function(clave) {
+                    if (!datos[clave]) {
+                        const c = document.getElementById('invite-' + clave);
+                        if (c) c.remove();
+                        delete invitacionesVistas[clave];
+                    }
+                });
+            });
+        }
+
+        function mostrarInvitacionEquipo(clave, inv) {
+            const zona = document.getElementById('zona-invitaciones');
+            if (!zona || document.getElementById('invite-' + clave)) return;
+            const card = document.createElement('div');
+            card.className = 'invite-card';
+            card.id = 'invite-' + clave;
+            card.innerHTML =
+                '<div style="display:flex; align-items:center; gap:10px; margin-bottom:11px;">' +
+                    '<div style="flex-shrink:0;">' + escudoHTML(inv.escudo, 34) + '</div>' +
+                    '<div style="flex:1; min-width:0;">' +
+                        '<div style="font-size:0.62rem; letter-spacing:1px; color:var(--txt-tenue); text-transform:uppercase;">Invitación a equipo</div>' +
+                        '<div style="color:var(--txt); font-size:0.92rem; font-weight:700; line-height:1.2;">' + escaparTexto(inv.equipoNombre || '') + '</div>' +
+                        '<div style="font-size:0.68rem; color:var(--txt-tenue);">de ' + escaparTexto(inv.deApodo || '') + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="display:flex; gap:8px;">' +
+                    '<button class="btn" style="margin-top:0; padding:8px; font-size:0.76rem;" onclick="aceptarInvitacionEquipo(\'' + clave + '\')">Aceptar</button>' +
+                    '<button class="btn btn-secundario" style="margin-top:0; padding:8px; font-size:0.76rem;" onclick="rechazarInvitacionEquipo(\'' + clave + '\')">Rechazar</button>' +
+                '</div>';
+            zona.appendChild(card);
+        }
+
+        // Paso 4: aceptar (me sumo al equipo de verdad)
+        async function aceptarInvitacionEquipo(clave) {
+            if (!window.FB || !window.FB.auth.currentUser) return;
+            const miUid = window.FB.auth.currentUser.uid;
+            const ruta = 'invitacionesEquipo/' + miUid + '/' + clave;
+            try {
+                // Leemos la invitación
+                const card = document.getElementById('invite-' + clave);
+                const snap = await new Promise(function(res) {
+                    window.FB.onValue(window.FB.ref(window.FB.rtdb, ruta), function(s) { res(s); }, { onlyOnce: true });
+                });
+                const inv = snap.val();
+                if (!inv) { if (card) card.remove(); return; }
+
+                // Traemos el equipo y nos sumamos a la lista
+                const refEq = window.FB.doc(window.FB.db, "equipos", inv.equipoId);
+                const docEq = await window.FB.getDoc(refEq);
+                if (!docEq.exists()) { alert("Ese equipo ya no existe."); await borrarInvitacion(ruta, clave); return; }
+                const datos = docEq.data();
+                const lista = datos.integrantes || [];
+                if (lista.indexOf(usuarioLogueado.apodo) === -1) {
+                    if (lista.length >= 7) { alert("Ese equipo ya está completo."); await borrarInvitacion(ruta, clave); return; }
+                    lista.push(usuarioLogueado.apodo);
+                    await window.FB.updateDoc(refEq, { integrantes: lista });
+                }
+                await borrarInvitacion(ruta, clave);
+                alert("¡Te sumaste a " + inv.equipoNombre + "!");
+                cargarEquipos();
+            } catch (e) {
+                alert("No se pudo aceptar: " + e.message);
+                console.error(e);
+            }
+        }
+
+        async function rechazarInvitacionEquipo(clave) {
+            if (!window.FB || !window.FB.auth.currentUser) return;
+            const miUid = window.FB.auth.currentUser.uid;
+            await borrarInvitacion('invitacionesEquipo/' + miUid + '/' + clave, clave);
+        }
+
+        async function borrarInvitacion(ruta, clave) {
+            try { await window.FB.rtdbSet(window.FB.ref(window.FB.rtdb, ruta), null); } catch (e) {}
+            const c = document.getElementById('invite-' + clave);
+            if (c) c.remove();
+            delete invitacionesVistas[clave];
+        }
+
+        function chatearCon(apodo) {
+            const j = jugadores[apodo];
+            if (!j || !j.uid) { alert("No se pudo identificar a ese jugador."); return; }
+            cerrarMiniPerfil();
+            abrirChatCon(j.uid, apodo);
         }
 
         // ===== REPORTE DE RESULTADO =====
@@ -2476,6 +2989,111 @@
             cont.innerHTML = lado(!esOscuro, 'Claro', sol) + lado(esOscuro, 'Oscuro', luna);
         }
 
+        // ===== SONIDOS (incrustados, no necesitan archivos aparte) =====
+        const SONIDOS = {
+            partido: "data:audio/mpeg;base64,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9fZtM5NazM61//tYxOiADzk7X8Rg9kIkuer8vJ7Iv/284KpMzKJhl4Uo3hj6xdS6pepzhrVUKJY8KzNKoardwQ/xz/+rzpf+2akZX1IM+PYoCFREJcDRE0Z/yu/fytUAkgDaLuPu/ErqalMWlVfDOYnorT5qmSIs09JF3w2RxaLejvJQMmaZrJo4RoSjj6kBmLlp/XZ243OFZCvZRRb+VudCN1bl/O0+qy1DOL7MWayUj2elw1Z+wCcuwvjU7+WeTT7qXfJTgNJeI6uAqeTVPcsOrqAVVUa/zhFOsJEkDOUHQBqBrvdevDEMPxRwAAgYo88BmOTHl3BAhfUQjHPLh7PvgYMeIROZmKt55g0bAqaHSZcCIdvZaJF3pVTujEtbtEv6JWfPNPVy//tYxOyAEO07RWZgtkIbMGYhhg24mT/VJToo9e+GHsox0phdWJvn0vx1Sl/oPpr2p0mIxqaIc8wn9uMSnfKm5mtOL6I5lAlUU/4nUbDIhd+JfwaVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxZDjORyka5VisRisSf1/ZbAMAgESPBgESc0FCUWNIkcOJEqc4klskUZaZnKpm4zaqqxVLKMxxmPVS6qlszHGb6qlqqxmPm36r9VfgE0Y/qqtVf2bZmy1Xqrn/+x+vyrlsfdm6pf1VgE1430vv//tYxOqCT+W3HqyYbcIkuaMFoyEw/GMww4Ug6uoq4GuVOrOwaiKVOrOwaiJMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tYxLwD0IG5DgyYa4AAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV",
+            invitacion: "data:audio/mpeg;base64,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VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tYxHoDwAAAAAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV",
+            mensaje: "data:audio/mpeg;base64,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"
+        };
+
+        // Reproduce un sonido respetando la configuración del usuario
+        function sonar(cual) {
+            if (!config.sonido) return;
+            const permisos = { partido: 'avisoPartido', invitacion: 'avisoInvitacion', mensaje: 'avisoMensaje' };
+            if (permisos[cual] && !config[permisos[cual]]) return;
+            if (!SONIDOS[cual]) return;
+            try {
+                const a = new Audio(SONIDOS[cual]);
+                a.volume = Math.max(0, Math.min(1, config.volumen / 100));
+                a.play().catch(function(){}); // si el navegador lo bloquea, no pasa nada
+            } catch (e) {}
+        }
+
+        // ===== CONFIGURACIÓN =====
+        // Valores por defecto (se guardan en el navegador, no gastan Firebase)
+        let config = {
+            sonido: true,
+            volumen: 70,
+            avisoPartido: true,
+            avisoInvitacion: true,
+            avisoMensaje: true
+        };
+
+        function cargarConfig() {
+            try {
+                const g = localStorage.getItem('picadito-config');
+                if (g) config = Object.assign(config, JSON.parse(g));
+            } catch (e) {}
+        }
+        function guardarConfig() {
+            try { localStorage.setItem('picadito-config', JSON.stringify(config)); } catch (e) {}
+        }
+
+        function abrirConfig() {
+            pintarConfig();
+            document.getElementById('modal-config').classList.remove('oculto');
+        }
+        function cerrarConfig() {
+            document.getElementById('modal-config').classList.add('oculto');
+        }
+
+        // Dibuja un interruptor (switch) prendido o apagado
+        function switchHTML(prendido) {
+            return '<div style="width:40px; height:22px; border-radius:20px; background:' + (prendido ? 'var(--verde)' : 'var(--hundido2)') +
+                '; border:1px solid ' + (prendido ? 'var(--verde)' : 'var(--linea)') + '; position:relative; transition:background 0.2s ease;">' +
+                '<div style="position:absolute; top:2px; left:' + (prendido ? '20px' : '2px') + '; width:16px; height:16px; border-radius:50%; background:' + (prendido ? 'var(--verde-osc)' : 'var(--txt-tenue)') + '; transition:left 0.2s ease;"></div>' +
+            '</div>';
+        }
+
+        function alternarSonido() {
+            config.sonido = !config.sonido;
+            guardarConfig();
+            pintarConfig();
+            if (config.sonido) sonar('invitacion'); // muestra cómo suena
+        }
+        function alternarAviso(cual) {
+            config[cual] = !config[cual];
+            guardarConfig();
+            pintarConfig();
+            // Si lo prendiste, te lo hacemos escuchar
+            if (config[cual]) {
+                const cuales = { avisoPartido: 'partido', avisoInvitacion: 'invitacion', avisoMensaje: 'mensaje' };
+                sonar(cuales[cual]);
+            }
+        }
+        let relojVolumen = null;
+        function cambiarVolumen(v) {
+            config.volumen = parseInt(v);
+            document.getElementById('valor-volumen').innerText = config.volumen + '%';
+            guardarConfig();
+            // Al soltar, suena una prueba para que escuches el nivel
+            clearTimeout(relojVolumen);
+            relojVolumen = setTimeout(function(){ sonar('invitacion'); }, 350);
+        }
+
+        function pintarConfig() {
+            pintarBotonTema();
+            document.getElementById('sw-sonido').innerHTML = switchHTML(config.sonido);
+            document.getElementById('volumen').value = config.volumen;
+            document.getElementById('valor-volumen').innerText = config.volumen + '%';
+            // Si el sonido está apagado, apagamos visualmente la zona de volumen
+            const zona = document.getElementById('zona-volumen');
+            zona.style.opacity = config.sonido ? '1' : '0.4';
+            zona.style.pointerEvents = config.sonido ? 'auto' : 'none';
+
+            const avisos = [
+                ['avisoPartido', 'Partido encontrado'],
+                ['avisoInvitacion', 'Invitación'],
+                ['avisoMensaje', 'Mensaje nuevo']
+            ];
+            document.getElementById('lista-avisos').innerHTML = avisos.map(function(a) {
+                return '<div style="display:flex; align-items:center; justify-content:space-between; padding:7px 0;">' +
+                    '<span style="font-size:0.8rem; color:var(--txt-suave);">' + a[1] + '</span>' +
+                    '<div onclick="alternarAviso(\'' + a[0] + '\')" style="cursor:pointer;">' + switchHTML(config[a[0]]) + '</div>' +
+                '</div>';
+            }).join('');
+        }
+
         function invitarAlGrupo(apodo) {
             alert('¡Invitaste a ' + apodo + ' a tu grupo! (Por ahora es de ejemplo)');
             cerrarMiniPerfil();
@@ -2511,6 +3129,7 @@
         // Activa el arrastre del recortador cuando carga la página
         window.addEventListener('DOMContentLoaded', function() {
             recInit();
+            cargarConfig();
             iniciarVigiaSesion();
             pintarBotonTema();
         });

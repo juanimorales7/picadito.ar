@@ -1,0 +1,1199 @@
+================================================================================
+PICADITO.AR - SISTEMA COMPETITIVO (BACKEND NODE.JS)
+Especificacion tecnica para implementacion
+================================================================================
+
+Version:   1.0
+Fecha:     22 de noviembre de 2026
+Proyecto:  Picadito.ar  -  Appikko Tech
+Contacto:  Juan Ignacio Morales
+Repo:      github.com/juanimorales7/picadito.ar
+
+
+--------------------------------------------------------------------------------
+0. RESUMEN EN UNA PAGINA
+--------------------------------------------------------------------------------
+
+Picadito.ar es una plataforma de futbol amateur competitivo para Mendoza. Hoy es
+una aplicacion 100% de navegador (un solo archivo index.html) que habla directo
+con Firebase. Funciona: hay cuentas, amigos, clubes, lobbies y chat en vivo.
+
+Lo que falta es el sistema competitivo: emparejar jugadores, armar equipos
+equilibrados, registrar resultados y mover el ELO.
+
+Eso NO puede vivir en el navegador. Si el cliente puede escribir su propio ELO,
+cualquiera con la consola del navegador abierta se pone 9999 puntos y el ranking
+deja de valer. Se necesita codigo de servidor que sea el unico dueno de esos
+numeros.
+
+Este documento especifica ese backend.
+
+QUE HAY QUE CONSTRUIR
+  - Una cola de emparejamiento que junta grupos de jugadores hasta completar un
+    partido (10, 14 o 22 jugadores segun modalidad).
+  - Un algoritmo que parte esos jugadores en dos equipos parejos.
+  - Un circuito de carga y confirmacion de resultados entre capitanes.
+  - El calculo de ELO, que solo el servidor puede escribir.
+  - Un sistema de reputacion, centrado en el problema real del futbol amateur:
+    la gente que no se presenta.
+
+STACK
+  Node.js 20 sobre Firebase Cloud Functions (2nd gen), TypeScript,
+  firebase-admin, Firestore como base.
+
+ESFUERZO ESTIMADO
+  Entre 60 y 90 horas para un desarrollador que conozca Node y Firebase,
+  repartidas en las 4 fases de la seccion 14.
+
+
+--------------------------------------------------------------------------------
+1. CONTEXTO DEL PROYECTO
+--------------------------------------------------------------------------------
+
+1.1 QUE ES
+
+Plataforma para organizar y competir en futbol amateur. La idea es tomar la
+estructura que usan FACEIT en Counter-Strike y League of Legends con su ranking,
+y bajarla al futbol 5, 7 y 11. Cada jugador tiene un ELO, cada partido lo mueve,
+cada temporada deja una tabla.
+
+Zonas activas: San Rafael, General Alvear y Mendoza Capital.
+Modalidades: F5 (5 vs 5), F7 (7 vs 7), F11 (11 vs 11).
+Rangos: Bronce, Plata, Oro, Platino, Diamante.
+
+1.2 COMO ESTA HECHO HOY
+
+Todo el frontend es UN SOLO ARCHIVO: index.html, de unos 800 KB, con el HTML,
+el CSS, el JavaScript y las imagenes y sonidos embebidos en base64. Sin
+framework, sin build, sin dependencias. Se abre en el navegador y anda.
+
+Es poco ortodoxo pero fue deliberado y funciona. No hace falta tocarlo para
+construir este backend, mas alla de los puntos de la seccion 13.
+
+Las convenciones del codigo estan en el archivo CLAUDE.md del repositorio.
+La mas importante: TODO SE NOMBRA EN ESPANOL. Funciones, variables, colecciones,
+campos. Es consistente en todo el proyecto y hay que mantenerlo.
+
+1.3 FIREBASE: LO QUE YA EXISTE
+
+Cloud Firestore (lo persistente):
+    usuarios      perfiles de jugador
+    equipos       los clubes (el nombre de la coleccion quedo de antes)
+    partidos      partidos (estructura minima, este documento la extiende)
+    solicitudes   solicitudes de amistad
+
+Realtime Database (lo instantaneo):
+    presencia            quien esta conectado
+    chats                mensajes uno a uno
+    misChats             indice de conversaciones por usuario
+    lecturas             marcas de leido
+    lobbies              salas previas al partido
+    invitacionesEquipo   invitaciones a clubes
+    invitacionesLobby    invitaciones a lobbies
+    chatsEquipo          chat por club
+    chatsLobby           chat por lobby
+
+Las reglas de seguridad estan escritas a mano, coleccion por coleccion. NO estan
+en modo de prueba. Cada rama nueva necesita su regla o tira PERMISSION_DENIED.
+
+Los chats se borran solos a los 3 dias. Es a proposito: menos costo y mas
+privacidad, sin tarea programada.
+
+1.4 EL LOBBY, QUE YA FUNCIONA
+
+El lobby es la sala previa. Un jugador lo crea, invita amigos, y los miembros
+aparecen en vivo en slots (estilo FACEIT, con el usuario propio al centro y mas
+grande). Vive en RTDB bajo lobbies/{hostUid}.
+
+ESE LOBBY ES EL PUNTO DE ENTRADA AL MATCHMAKING. Cuando el host aprieta "Buscar
+partida", lo que entra a la cola es el lobby entero, no los jugadores sueltos.
+En este documento a ese grupo lo llamamos PARTY.
+
+Un party puede ser de 1 jugador (alguien solo) hasta la mitad de la modalidad
+(5 en F5, 7 en F7, 11 en F11). No se permite encolar un party que ya llene un
+equipo completo contra desconocidos sin aviso, ver seccion 7.4.
+
+
+--------------------------------------------------------------------------------
+2. EL PROBLEMA A RESOLVER
+--------------------------------------------------------------------------------
+
+2.1 POR QUE HACE FALTA UN SERVIDOR
+
+Tres razones, en orden de importancia:
+
+(a) EL ELO TIENE QUE SER INFALSIFICABLE.
+    Hoy las reglas de Firestore permiten que un usuario escriba su propio
+    documento. Si el ELO vive ahi, es editable desde la consola del navegador.
+    Un ranking que se puede editar no es un ranking.
+
+(b) EL EMPAREJAMIENTO ES UNA DECISION CENTRAL.
+    Dos navegadores no se pueden poner de acuerdo entre ellos sobre quien juega
+    con quien. Tiene que haber un arbitro unico que mire toda la cola y decida.
+
+(c) LOS RESULTADOS NECESITAN AUTORIDAD.
+    Si los dos capitanes cargan resultados distintos, alguien tiene que resolver
+    el conflicto con una regla, no con quien hizo clic primero.
+
+2.2 LA DIFERENCIA CON UN JUEGO ONLINE
+
+Esto es lo mas importante del documento y lo que hace que no se pueda copiar el
+diseno de FACEIT tal cual.
+
+En Counter-Strike el matchmaking es instantaneo: encontro diez personas, el
+partido arranca en treinta segundos. En futbol amateur eso es imposible. Hace
+falta una cancha, un dia, una hora, y que veintidos personas se trasladen
+fisicamente hasta ahi.
+
+Entonces el emparejamiento de Picadito no busca "diez personas ahora". Busca
+GRUPOS CUYAS DISPONIBILIDADES SE CRUZAN.
+
+Cada party que entra a la cola declara:
+    - modalidad (F5, F7, F11)
+    - zona (San Rafael, General Alvear, Capital)
+    - una o mas VENTANAS de disponibilidad (desde / hasta)
+
+El emparejador busca parties de la misma modalidad y zona cuyas ventanas se
+solapen lo suficiente como para que entre un partido, y que sumen exactamente
+la cantidad de jugadores que la modalidad pide.
+
+Esto unifica los dos casos de uso sin codigo extra:
+    - "Quiero jugar YA"      -> ventana = de ahora a dentro de 2 horas
+    - "Quiero jugar el jueves" -> ventana = jueves de 20:00 a 23:00
+
+Una consecuencia practica: el tiempo en cola se mide en horas y dias, no en
+segundos. Todos los parametros de espera de este documento estan calibrados para
+esa escala.
+
+2.3 EL PROBLEMA DE LA MASA CRITICA
+
+Al principio va a haber poquisimos usuarios por zona. Si el emparejador exige
+ELO parecido, nadie se va a emparejar nunca, la gente va a probar una vez, no va
+a pasar nada, y no vuelve mas.
+
+ESTO MATA PLATAFORMAS NUEVAS. El sistema tiene que estar sesgado agresivamente
+hacia emparejar, aunque el partido quede desparejo. La tolerancia de ELO se abre
+rapido con el tiempo en cola y despues de 24 horas desaparece: empareja con
+quien sea. Ver seccion 7.3.
+
+Mejor un partido desparejo que ningun partido.
+
+
+--------------------------------------------------------------------------------
+3. DECISIONES DE ARQUITECTURA
+--------------------------------------------------------------------------------
+
+3.1 FIREBASE CLOUD FUNCTIONS (2nd gen), NODE.JS 20, TYPESCRIPT
+
+Por que Cloud Functions y no un servidor propio:
+    - El proyecto ya vive entero en Firebase. Admin SDK accede a Firestore sin
+      credenciales ni red que configurar.
+    - La autenticacion viene resuelta: una funcion callable recibe el usuario ya
+      verificado en context.auth. Con un servidor aparte hay que verificar
+      tokens a mano.
+    - No hay servidor que mantener, actualizar ni reiniciar.
+    - No se duerme. Las capas gratis de Render o Railway apagan el servicio por
+      inactividad y el primer pedido tarda 30 segundos o mas.
+
+Lo que cuesta:
+    - Requiere pasar el proyecto al plan BLAZE (pago por uso). Tiene capa
+      gratuita generosa y a la escala de Picadito el gasto real estimado es
+      entre 0 y 5 dolares por mes. Detalle en la seccion 16.
+
+TypeScript, no JavaScript. El frontend es JS plano y esta bien asi, pero el
+backend maneja plata simbolica (el ELO de la gente) y los errores de tipo ahi
+salen caros. El tipado se paga solo.
+
+3.2 FIRESTORE, NO REALTIME DATABASE
+
+Todo lo competitivo va en Firestore:
+    - Soporta transacciones de verdad, que hacen falta para que el ELO se
+      aplique exactamente una vez.
+    - Soporta consultas compuestas con indices, que el emparejador necesita.
+    - Las reglas de seguridad por campo son mas expresivas.
+
+RTDB se queda para lo que ya hace: presencia, chats y lobbies. No se toca.
+
+3.3 EL SERVIDOR ES EL UNICO QUE ESCRIBE LO COMPETITIVO
+
+Regla sin excepciones. El cliente NUNCA escribe:
+    elo, eloMaximo, partidosJugados, partidosGanados, partidosEmpatados,
+    partidosPerdidos, reputacion, noShows, rachaActual
+
+El cliente los LEE. Para cambiarlos, llama a una funcion.
+
+Esto se hace cumplir en dos lugares a la vez, a proposito: en las reglas de
+Firestore (seccion 5) y en la validacion de cada funcion (seccion 6).
+
+3.4 TODO MOVIMIENTO DE ELO QUEDA AUDITADO
+
+Cada cambio de ELO escribe un documento en la coleccion eventosElo, que es de
+solo agregar. Si manana el calculo tiene un error, o alguien reclama, se puede
+reconstruir y rehacer la historia. Sin esto, un bug en la formula es un dano
+permanente y silencioso.
+
+3.5 IDEMPOTENCIA
+
+Las funciones se pueden ejecutar dos veces. Cloud Functions reintenta ante
+fallos de red, y un usuario puede hacer doble clic. Aplicar el ELO dos veces
+seria desastroso.
+
+Toda operacion que mueve estado corre dentro de una transaccion de Firestore
+que primero verifica una bandera (por ejemplo partido.eloAplicado) y aborta si
+ya estaba hecha.
+
+
+--------------------------------------------------------------------------------
+4. MODELO DE DATOS
+--------------------------------------------------------------------------------
+
+Todos los nombres en espanol, como el resto del proyecto.
+Los tipos son orientativos; "ts" significa Firestore Timestamp.
+
+4.1 usuarios/{uid}  -  CAMPOS A AGREGAR
+
+Los campos actuales (nombre, foto, zona, etc.) quedan como estan. Se suman:
+
+    elo                 number    arranca en 1000
+    eloMaximo           number    el mas alto alcanzado
+    partidosJugados     number    arranca en 0
+    partidosGanados     number
+    partidosEmpatados   number
+    partidosPerdidos    number
+    rangoActual         string    'sin_rango'|'bronce'|'plata'|'oro'|
+                                  'platino'|'diamante'  (derivado, ver 9.4)
+    reputacion          number    0 a 100, arranca en 80
+    noShows             number    veces que no se presento
+    enCola              boolean   si esta en la cola ahora
+    partyActual         string?   id del party si esta en cola
+    suspendidoHasta     ts?       si esta impedido de encolar
+    ultimoPartido       ts?
+
+IMPORTANTE: ninguno de estos campos puede ser escrito por el cliente.
+
+4.2 colaMatchmaking/{partyId}
+
+Un documento por grupo esperando partido. El id del documento es el uid del host
+del lobby, igual que en RTDB, para que sea facil cruzarlos.
+
+    hostUid       string
+    jugadores     array<{ uid, nombre, elo, foto }>   copia congelada al encolar
+    cantidad      number     jugadores.length
+    modalidad     string     'F5' | 'F7' | 'F11'
+    zona          string     'san_rafael'|'general_alvear'|'capital'
+    ventanas      array<{ desde: ts, hasta: ts }>     1 a 5 ventanas
+    eloPromedio   number     promedio del party al momento de encolar
+    creadoEn      ts         cuando entro a la cola (define la prioridad)
+    expiraEn      ts         ultima ventana + margen; se limpia despues
+    estado        string     'buscando' | 'emparejado' | 'cancelado'
+
+Por que se congela el ELO y el nombre al encolar: para que el emparejador no
+tenga que leer N documentos de usuario en cada corrida. Se recalcula cuando el
+party vuelve a encolar.
+
+Indices compuestos necesarios (crearlos en firestore.indexes.json):
+    (estado, modalidad, zona, creadoEn)
+    (estado, expiraEn)
+
+4.3 partidos/{partidoId}
+
+    estado          string   'propuesto'|'confirmado'|'jugado'|
+                             'disputado'|'cancelado'
+    modalidad       string
+    zona            string
+    inicioPropuesto ts       momento elegido dentro de la ventana comun
+    duracionMin     number   90 por defecto
+    cancha          string?  se completa despues, a mano
+    equipoA         {
+                       jugadores: array<uid>
+                       capitan: uid
+                       eloPromedio: number
+                    }
+    equipoB         { mismo formato }
+    parties         array<string>    ids de los parties que lo formaron
+    confirmaciones  map<uid, boolean>    solo los dos capitanes
+    resultado       {
+                       golesA: number
+                       golesB: number
+                       cargadoPor: uid
+                       cargadoEn: ts
+                    } | null
+    confirmacionResultado  map<uid, boolean>
+    disputa         { motivo: string, abiertaPor: uid, abiertaEn: ts } | null
+    eloAplicado     boolean   arranca en false
+    ausentes        array<uid>
+    creadoEn        ts
+    actualizadoEn   ts
+
+Indices:
+    (estado, inicioPropuesto)
+    (equipoA.jugadores array-contains, creadoEn desc)     para "mis partidos"
+    (equipoB.jugadores array-contains, creadoEn desc)
+
+4.4 eventosElo/{eventoId}  -  SOLO AGREGAR
+
+    partidoId    string
+    uid          string
+    eloAntes     number
+    eloDespues   number
+    delta        number
+    factorK      number
+    esperado     number     la probabilidad calculada, 0 a 1
+    obtenido     number     1 gano, 0.5 empato, 0 perdio
+    multMargen   number     multiplicador por diferencia de goles
+    creadoEn     ts
+
+Nadie lee esta coleccion desde el cliente. Es para auditoria y para poder
+recalcular si hace falta.
+
+4.5 votosReputacion/{votoId}
+
+    partidoId    string
+    deUid        string
+    paraUid      string
+    tipo         string   'buen_companero'|'puntual'|'fair_play'|
+                          'no_se_presento'|'mala_actitud'
+    creadoEn     ts
+
+Indice unico logico: un voto por (partidoId, deUid, paraUid, tipo). Se valida en
+la funcion, Firestore no tiene unicidad compuesta nativa.
+
+
+--------------------------------------------------------------------------------
+5. REGLAS DE SEGURIDAD
+--------------------------------------------------------------------------------
+
+Nota para quien implemente: las reglas actuales se fueron parcheando de a poco y
+convendria reescribir el archivo completo de una vez, no agregar bloques al
+final. Ya hubo dos incidentes de JSON roto por pegar un bloque despues de la
+llave de cierre.
+
+5.1 usuarios
+
+El usuario puede escribir su documento PERO SOLO los campos de perfil. La forma
+de hacerlo cumplir en Firestore es con una lista blanca:
+
+    match /usuarios/{uid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == uid;
+      allow update: if request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['nombre','foto','zona','descripcion','posicion',
+                       'pieHabil','configuracion','amigos','bloqueados']);
+    }
+
+Cualquier intento de tocar elo, reputacion o las estadisticas desde el cliente
+rebota aca. El Admin SDK del servidor ignora estas reglas, que es exactamente lo
+que queremos.
+
+5.2 colaMatchmaking
+
+    allow read:  if request.auth != null
+                 && request.auth.uid in resource.data.jugadores[].uid;
+    allow write: if false;
+
+Se entra y se sale de la cola solo por funcion. El cliente puede mirar su propio
+documento para mostrar "buscando partida hace 2 horas".
+
+(Nota de implementacion: Firestore no permite indexar dentro de un array de
+objetos en una regla. En la practica conviene guardar ademas un array plano
+jugadoresUids: array<string> y usar ese para la regla de lectura.)
+
+5.3 partidos
+
+    allow read:  if request.auth != null
+                 && (request.auth.uid in resource.data.equipoA.jugadores
+                  || request.auth.uid in resource.data.equipoB.jugadores);
+    allow write: if false;
+
+Todo se escribe por funcion.
+
+5.4 eventosElo y votosReputacion
+
+    allow read, write: if false;
+
+Nadie los toca desde el cliente. Los votos se emiten por funcion.
+
+
+--------------------------------------------------------------------------------
+6. API: FUNCIONES CALLABLE
+--------------------------------------------------------------------------------
+
+Todas son onCall de Firebase (https.onCall). El cliente las invoca con
+httpsCallable del SDK web. La autenticacion llega en request.auth, ya
+verificada: NO hay que confiar en ningun uid que venga en el payload.
+
+Region: southamerica-east1 (Sao Paulo), que es la mas cercana a Mendoza.
+
+Todas devuelven { ok: true, ... } o lanzan HttpsError con uno de estos codigos:
+    unauthenticated     no hay sesion
+    permission-denied   hay sesion pero no le corresponde
+    failed-precondition  el estado no lo permite (ya esta en cola, etc.)
+    invalid-argument    payload mal formado
+    not-found           no existe
+
+--------------------------------------------------------------------------------
+6.1  buscarPartida
+
+  Entrada:
+      modalidad   'F5' | 'F7' | 'F11'
+      zona        'san_rafael' | 'general_alvear' | 'capital'
+      ventanas    array<{ desde: number, hasta: number }>   epoch ms, 1 a 5
+
+  Que hace:
+      1. Lee el lobby del usuario en RTDB: lobbies/{uid}.
+      2. Verifica que quien llama sea el HOST del lobby. Solo el host encola.
+      3. Verifica que ningun miembro este ya en cola (usuarios.enCola) ni
+         suspendido (suspendidoHasta en el futuro).
+      4. Verifica que la cantidad de miembros no supere la mitad de la
+         modalidad.
+      5. Valida las ventanas: cada una dura al menos duracionMin + 30 minutos,
+         ninguna empieza en el pasado, ninguna termina a mas de 14 dias.
+      6. Lee el ELO actual de cada miembro y arma la copia congelada.
+      7. Escribe colaMatchmaking/{hostUid} y marca enCola en cada usuario.
+         Todo en una transaccion.
+
+  Salida:
+      { ok: true, partyId, posicionEstimada }
+
+  Errores tipicos:
+      failed-precondition  'ya_en_cola', 'lobby_vacio', 'party_demasiado_grande',
+                           'jugador_suspendido'
+
+--------------------------------------------------------------------------------
+6.2  cancelarBusqueda
+
+  Entrada:  (ninguna)
+
+  Que hace:
+      Solo el host puede cancelar. Borra el documento de cola y limpia enCola y
+      partyActual de cada miembro. Si el party ya fue emparejado (estado
+      'emparejado'), falla: a esa altura hay que rechazar el partido, no cancelar
+      la busqueda.
+
+  Salida:  { ok: true }
+
+--------------------------------------------------------------------------------
+6.3  responderPropuesta
+
+  Entrada:
+      partidoId   string
+      acepta      boolean
+      motivo      string?    si acepta = false
+
+  Que hace:
+      Solo los dos capitanes pueden responder. Marca confirmaciones[uid].
+
+      Si los dos aceptan      -> estado pasa a 'confirmado'
+      Si alguno rechaza       -> estado pasa a 'cancelado', y los parties del
+                                 OTRO lado vuelven a la cola conservando su
+                                 creadoEn original (no pierden la antiguedad,
+                                 que seria injusto)
+      Si pasan 12 horas sin respuesta -> lo maneja la tarea programada 12.3
+
+  Salida:  { ok: true, estado }
+
+--------------------------------------------------------------------------------
+6.4  cargarResultado
+
+  Entrada:
+      partidoId   string
+      golesA      number   entero, 0 a 50
+      golesB      number   entero, 0 a 50
+
+  Que hace:
+      1. Verifica que el partido este 'confirmado' y que ya haya pasado
+         inicioPropuesto (no se carga el resultado de un partido que no se jugo).
+      2. Verifica que quien llama sea capitan de alguno de los dos equipos.
+      3. Si NO hay resultado cargado: lo guarda y marca
+         confirmacionResultado[capitanQueCargo] = true.
+      4. Si YA hay un resultado cargado por el otro capitan:
+            - coincide  -> estado 'jugado', se dispara aplicarElo (ver 6.5)
+            - no coincide -> estado 'disputado', NO se toca el ELO
+
+  Salida:  { ok: true, estado }
+
+--------------------------------------------------------------------------------
+6.5  aplicarElo   (INTERNA, no callable)
+
+  No la llama el cliente. La invocan cargarResultado y la tarea 12.4.
+
+  Que hace, todo dentro de UNA transaccion de Firestore:
+      1. Lee el partido. Si eloAplicado === true, termina sin hacer nada.
+         (Esta es la garantia de idempotencia. Es la linea mas importante de
+         todo el backend.)
+      2. Lee los documentos de los jugadores de ambos equipos.
+      3. Calcula los deltas segun la seccion 9.
+      4. Escribe el nuevo elo, eloMaximo, contadores y rangoActual de cada uno.
+      5. Escribe un documento en eventosElo por cada jugador.
+      6. Marca partido.eloAplicado = true.
+
+  Si la transaccion falla, no se aplico nada. Si tiene exito, se aplico todo
+  exactamente una vez.
+
+--------------------------------------------------------------------------------
+6.6  abrirDisputa
+
+  Entrada:
+      partidoId   string
+      motivo      string   10 a 500 caracteres
+
+  Que hace:
+      Un capitan puede abrir disputa hasta 48 horas despues del partido, aun si
+      el resultado ya se confirmo. Si el ELO ya se aplico, NO se revierte
+      automaticamente: se marca el partido como 'disputado' y queda para
+      resolucion manual. La reversion automatica abre la puerta a abusos.
+
+  Salida:  { ok: true }
+
+--------------------------------------------------------------------------------
+6.7  reportarAusencia
+
+  Entrada:
+      partidoId   string
+      uids        array<string>   quienes no se presentaron
+
+  Que hace:
+      Lo llama un capitan despues del partido. Un uid se cuenta como ausencia
+      confirmada solo si lo reportan AL MENOS DOS jugadores de equipos
+      distintos. Con eso se evita que un capitan resentido castigue a quien
+      quiera.
+
+      Al confirmarse: usuarios.noShows +1 y reputacion -15.
+
+  Salida:  { ok: true, registrados }
+
+--------------------------------------------------------------------------------
+6.8  votarReputacion
+
+  Entrada:
+      partidoId   string
+      votos       array<{ paraUid, tipo }>
+
+  Que hace:
+      Disponible hasta 72 horas despues del partido. Reglas:
+          - no se puede votar a uno mismo
+          - solo a jugadores del mismo partido
+          - un voto por tipo por persona por partido
+          - maximo 3 votos positivos por partido (para que valgan algo)
+
+      Los positivos suman +1 a reputacion (tope 100).
+      Los negativos de tipo 'mala_actitud' suman -3, y solo cuentan si hay dos o
+      mas de distintos votantes.
+
+  Salida:  { ok: true, aplicados }
+
+
+--------------------------------------------------------------------------------
+7. EL EMPAREJADOR
+--------------------------------------------------------------------------------
+
+7.1 CUANDO CORRE
+
+Funcion programada (onSchedule) cada 2 minutos.
+
+Dos minutos es mas que suficiente: las ventanas de disponibilidad duran horas.
+Correr cada 10 segundos solo gastaria invocaciones sin mejorar nada.
+
+7.2 JUGADORES POR MODALIDAD
+
+    F5   ->  10 jugadores  (5 por equipo)
+    F7   ->  14 jugadores  (7 por equipo)
+    F11  ->  22 jugadores  (11 por equipo)
+
+El total tiene que dar EXACTO. No se arman partidos incompletos: en futbol
+amateur faltar un jugador arruina el partido, y es mejor seguir esperando.
+
+7.3 TOLERANCIA DE ELO (SE ABRE CON EL TIEMPO)
+
+    tolerancia(horasEnCola):
+        si horasEnCola >= 24  ->  Infinito   (empareja con quien sea)
+        si no                 ->  100 + (horasEnCola * 60)
+
+    En numeros:
+        recien encolado   +/- 100
+        a las 2 horas     +/- 220
+        a las 6 horas     +/- 460
+        a las 12 horas    +/- 820
+        a las 24 horas    sin limite
+
+Cuando se comparan dos parties, se usa la tolerancia del que ESPERO MAS. Es
+deliberado: el que mas espero manda, y asi la cola se vacia por antiguedad.
+
+Estos numeros son para arrancar con pocos usuarios. Cuando haya volumen real por
+zona, habra que cerrarlos. Dejarlos como constantes en un solo archivo de
+configuracion, no desparramados por el codigo.
+
+7.4 ALGORITMO
+
+    cada 2 minutos:
+
+      para cada combinacion (modalidad, zona):
+
+        parties = colaMatchmaking
+                    .where(estado == 'buscando')
+                    .where(modalidad == M)
+                    .where(zona == Z)
+                    .orderBy(creadoEn, 'asc')
+                    .limit(100)
+
+        N = jugadoresPorModalidad[M]
+
+        mientras queden parties:
+
+          semilla = parties[0]          // el que mas espero
+
+          candidatos = parties[1..].filter(p =>
+              hayVentanaComun(semilla, p, duracionMin)
+              && |p.eloPromedio - semilla.eloPromedio| <= tolerancia(masViejo)
+          )
+
+          combo = buscarCombinacion(semilla, candidatos, N)
+
+          si no hay combo:
+              sacar semilla de la lista de trabajo (no de la cola) y seguir
+              con el siguiente
+              continuar
+
+          ventana = interseccion de las ventanas de todos los del combo
+          inicio  = primer horario "lindo" dentro de la ventana
+                    (redondeado a la media hora siguiente)
+
+          equipos = balancear(combo, N/2)       // seccion 8
+
+          en una transaccion:
+              crear partidos/{id} con estado 'propuesto'
+              marcar cada party del combo como estado 'emparejado'
+              notificar a los capitanes (seccion 7.6)
+
+          sacar los parties del combo de la lista de trabajo
+
+7.5 buscarCombinacion: COMO SE ARMA EL GRUPO
+
+Es un problema de suma de subconjuntos: encontrar parties cuyos tamanos sumen
+exactamente N, incluyendo siempre a la semilla.
+
+Busqueda en profundidad con poda:
+
+    buscarCombinacion(semilla, candidatos, N):
+        objetivo = N - semilla.cantidad
+        ordenar candidatos por:
+            1. tiempo en cola, el mas viejo primero
+            2. |elo - semilla.elo|, el mas parecido primero
+        dfs(indice=0, restante=objetivo, elegidos=[]):
+            si restante == 0: devolver [semilla, ...elegidos]
+            si restante < 0:  devolver null
+            si indice >= candidatos.length: devolver null
+            // poda: si todo lo que queda no alcanza, cortar
+            si suma(candidatos[indice..]) < restante: devolver null
+            probar con candidatos[indice], despues sin el
+        limitar a 20.000 nodos explorados; si se pasa, devolver null y
+        reintentar en la proxima corrida
+
+El limite de nodos es por las dudas. Con menos de 100 parties en cola no se va
+a alcanzar nunca, pero evita que una corrida patologica agote el tiempo de la
+funcion.
+
+7.6 NOTIFICACION
+
+Al crear el partido se escribe en RTDB, bajo notificaciones/{uid}, una entrada
+por cada jugador del partido. El frontend ya tiene listeners con onValue y el
+sistema de avisos propio (la funcion avisar()), asi que aparece solo.
+
+NO usar alert() del navegador. Fue sacado de todo el proyecto a proposito.
+
+7.7 CASOS BORDE QUE HAY QUE CONTEMPLAR
+
+    - Un jugador del party se desconecta mientras espera: NO sacarlo. En futbol
+      la presencia online no significa nada, se juega en una cancha dentro de
+      tres dias.
+    - Un party es emparejado y su host cancela: el partido se cancela, los otros
+      parties vuelven a la cola con su creadoEn original.
+    - Un mismo jugador aparece en dos parties: imposible por la verificacion de
+      enCola en buscarPartida, pero el emparejador lo revalida igual antes de
+      crear el partido. Defensa en profundidad.
+    - Todas las ventanas de un party vencieron: la tarea 12.2 lo saca.
+
+
+--------------------------------------------------------------------------------
+8. BALANCEO DE EQUIPOS
+--------------------------------------------------------------------------------
+
+Dado un conjunto de parties que suman N jugadores, partirlos en dos equipos de
+N/2 minimizando la diferencia de ELO promedio.
+
+RESTRICCION DURA: un party no se parte nunca. Si cuatro amigos se encolan
+juntos, juegan juntos. Es la razon por la que la gente usa el lobby.
+
+Como el espacio de busqueda es sobre PARTIES y no sobre jugadores, es chico: con
+un maximo de 10 parties son 2^10 = 1024 combinaciones. Se puede resolver exacto
+por fuerza bruta, sin heuristicas.
+
+    balancear(parties, tamanoEquipo):
+        mejor = null
+        para cada subconjunto S de parties:
+            si suma de tamanos de S != tamanoEquipo: continuar
+            A = S
+            B = parties - S
+            dif = |eloPromedio(A) - eloPromedio(B)|
+            si mejor == null o dif < mejor.dif:
+                mejor = { A, B, dif }
+        devolver mejor
+
+Capitan de cada equipo: el host del party mas grande de ese equipo. Si empatan en
+tamano, el de mayor ELO. El capitan es quien confirma la propuesta y carga el
+resultado.
+
+Si la mejor diferencia posible supera los 150 puntos, crear igual el partido pero
+marcarlo con una bandera desbalanceado: true, para que el frontend pueda avisar
+("este partido esta desparejo") y para poder medir despues con que frecuencia
+pasa.
+
+
+--------------------------------------------------------------------------------
+9. SISTEMA DE ELO
+--------------------------------------------------------------------------------
+
+9.1 LA FORMULA
+
+Elo clasico adaptado a equipos. El rating de un equipo es el promedio de sus
+jugadores.
+
+    Ra = ELO promedio del equipo A
+    Rb = ELO promedio del equipo B
+
+    Esperado para A:
+        Ea = 1 / (1 + 10^((Rb - Ra) / 400))
+
+    Obtenido:
+        gano    -> 1
+        empato  -> 0.5
+        perdio  -> 0
+
+    Multiplicador por diferencia de goles:
+        m = 1 + ln(1 + |golesA - golesB|) / 4,  con tope en 1.5
+
+        diferencia 0  ->  1.00
+        diferencia 1  ->  1.17
+        diferencia 3  ->  1.35
+        diferencia 5  ->  1.45
+        diferencia 7+ ->  1.50 (tope)
+
+    Delta de cada jugador del equipo A:
+        delta = redondear( K_jugador * m * (Sa - Ea) )
+
+El multiplicador usa logaritmo y tiene tope a proposito: golear tiene que valer
+mas que ganar raspando, pero un 10 a 0 no puede valer diez veces mas que un 1 a
+0, o la gente se pone a inflar resultados.
+
+9.2 FACTOR K
+
+El K es por jugador, no por equipo. Los nuevos se mueven rapido hasta encontrar
+su nivel, los veteranos se mueven despacio.
+
+    partidosJugados < 5    ->  K = 60    (partidos de colocacion)
+    elo < 1400             ->  K = 40
+    elo < 1800             ->  K = 32
+    elo >= 1800            ->  K = 24
+
+9.3 PISO Y VALORES INICIALES
+
+    ELO inicial:   1000
+    Piso absoluto:  100   (el ELO nunca baja de ahi)
+    Sin techo.
+
+9.4 RANGOS
+
+    sin_rango   partidosJugados < 5
+    bronce      elo < 1000
+    plata       1000 a 1199
+    oro         1200 a 1399
+    platino     1400 a 1599
+    diamante    1600 o mas
+
+El rango no se muestra hasta terminar los 5 partidos de colocacion. Evita que
+alguien vea "Bronce" en su primer partido y se vaya.
+
+rangoActual se guarda desnormalizado en el documento del usuario para no
+recalcularlo en cada lectura del frontend. Lo escribe aplicarElo.
+
+NOTA DE DISENO: los colores de rango del frontend (#cd7f32 bronce, #c0c0c0
+plata, #f59e0b oro, #a855f7 platino, #5fd3f3 diamante) son datos, no decoracion:
+no cambian con el tema claro/oscuro. No tocarlos.
+
+9.5 EJEMPLO COMPLETO
+
+    Equipo A: promedio 1150.  Equipo B: promedio 1050.
+    Resultado: A gana 4 a 1.
+
+    Ea = 1 / (1 + 10^((1050-1150)/400))
+       = 1 / (1 + 10^(-0.25))
+       = 1 / (1 + 0.562)
+       = 0.640
+
+    m = 1 + ln(1+3)/4 = 1 + 1.386/4 = 1.347
+
+    Un jugador de A con elo 1200 y 30 partidos (K=40):
+        delta = round(40 * 1.347 * (1 - 0.640)) = round(19.4) = +19
+
+    Un jugador de A con elo 900 y 2 partidos (K=60):
+        delta = round(60 * 1.347 * (1 - 0.640)) = round(29.1) = +29
+
+    Un jugador de B con elo 1100 y 50 partidos (K=40):
+        Eb = 1 - 0.640 = 0.360
+        delta = round(40 * 1.347 * (0 - 0.360)) = round(-19.4) = -19
+
+Se gana poco por ganarle a quien se esperaba que perdiera. Es correcto.
+
+
+--------------------------------------------------------------------------------
+10. RESULTADOS Y DISPUTAS
+--------------------------------------------------------------------------------
+
+10.1 EL CIRCUITO NORMAL
+
+    partido confirmado
+        -> se juega
+        -> capitan A carga 3-2
+        -> capitan B carga 3-2
+        -> coinciden: estado 'jugado', se aplica el ELO
+
+10.2 SI NO COINCIDEN
+
+    -> capitan A carga 3-2
+    -> capitan B carga 2-3
+    -> estado 'disputado'. NO se toca el ELO.
+    -> queda esperando resolucion manual
+
+Para la fase 1 la resolucion es manual: alguien de Picadito mira y arregla con
+una herramienta interna o directo en la consola de Firebase. Automatizarlo
+(votacion de todos los jugadores, por ejemplo) es tentador pero es una fuente de
+abuso enorme y no vale la pena hasta tener volumen.
+
+10.3 SI UNO SOLO CARGA
+
+A las 24 horas del inicio del partido, la tarea 12.4 toma el unico resultado
+cargado como valido y aplica el ELO. El capitan que no cargo recibe un aviso.
+
+Es una decision a conciencia: lo peor que puede pasar es que no pase nada. Un
+sistema donde los partidos quedan colgados para siempre se muere solo.
+
+10.4 SI NO CARGA NINGUNO
+
+A las 48 horas el partido pasa a 'cancelado' sin efecto en el ELO de nadie.
+
+
+--------------------------------------------------------------------------------
+11. REPUTACION Y AUSENCIAS
+--------------------------------------------------------------------------------
+
+11.1 POR QUE IMPORTA MAS QUE EL ELO
+
+En futbol amateur el problema numero uno no es que alguien juegue mal. Es que no
+aparezca. Un jugador que falta deja a trece personas sin partido.
+
+El sistema de reputacion existe para eso. Todo lo demas es secundario.
+
+11.2 ESCALA
+
+    Arranca en 80, va de 0 a 100.
+
+    +1   por cada voto positivo recibido (tope 100)
+    -3   por 'mala_actitud' confirmada (dos o mas votantes distintos)
+    -15  por ausencia confirmada (dos o mas reportes de equipos distintos)
+
+11.3 CONSECUENCIAS
+
+    reputacion >= 70    normal
+    reputacion 50 a 69  se muestra un aviso en su ficha
+    reputacion 30 a 49  no puede encolar durante 7 dias
+    reputacion < 30     no puede encolar durante 30 dias
+
+La suspension se guarda en usuarios.suspendidoHasta y la verifica
+buscarPartida.
+
+11.4 RECUPERACION
+
+Por cada partido jugado sin reportes negativos, +2 de reputacion. Hace falta un
+camino de vuelta: un sistema del que no se puede salir empuja a la gente a
+hacerse una cuenta nueva.
+
+
+--------------------------------------------------------------------------------
+12. TAREAS PROGRAMADAS
+--------------------------------------------------------------------------------
+
+12.1  emparejador           cada 2 minutos
+      Corre el algoritmo de la seccion 7.
+
+12.2  limpiarCola           cada 15 minutos
+      Saca de colaMatchmaking los documentos con expiraEn en el pasado.
+      Limpia enCola y partyActual de sus jugadores. Les deja un aviso de que la
+      busqueda vencio sin encontrar partido.
+
+12.3  vencerPropuestas      cada 30 minutos
+      Partidos en estado 'propuesto' creados hace mas de 12 horas y sin las dos
+      confirmaciones: pasan a 'cancelado'. Los parties que SI habian confirmado
+      vuelven a la cola con su creadoEn original.
+
+12.4  cerrarPartidos        cada hora
+      - Partidos 'confirmado' con un solo resultado cargado y mas de 24 horas
+        desde el inicio: se toma ese resultado, se aplica el ELO.
+      - Partidos 'confirmado' sin ningun resultado y mas de 48 horas: pasan a
+        'cancelado'.
+
+12.5  recalcularReputacion  una vez por dia, de madrugada
+      Aplica el +2 de recuperacion a quienes jugaron sin reportes negativos.
+
+
+--------------------------------------------------------------------------------
+13. QUE HAY QUE CAMBIAR EN EL FRONTEND
+--------------------------------------------------------------------------------
+
+El frontend es un solo index.html. Estos son los puntos de contacto. Quien
+implemente el backend deberia coordinar estos cambios, no hacerlos por su cuenta
+sin avisar.
+
+13.1  Importar funciones de Firebase y exponerlas en window.FB
+
+El index.html tiene un <script type="module"> que importa Firebase y expone todo
+en el objeto global window.FB, porque el script principal es un script clasico y
+no puede importar modulos.
+
+HAY QUE AGREGAR getFunctions y httpsCallable ahi, o el script principal no los
+ve. Es un error facil de cometer.
+
+    import { getFunctions, httpsCallable }
+      from 'https://www.gstatic.com/firebasejs/<version>/firebase-functions.js';
+
+    window.FB.funciones = getFunctions(app, 'southamerica-east1');
+    window.FB.llamar = httpsCallable;
+
+13.2  Boton "Buscar partida" del lobby
+
+Hoy no hace nada real. Tiene que:
+    - abrir un selector de ventanas de disponibilidad (es UI nueva)
+    - llamar a buscarPartida
+    - pasar el lobby a estado "buscando", con el tiempo transcurrido en pantalla
+    - ofrecer cancelar
+
+13.3  Pantalla de partido propuesto
+
+Nueva. Muestra los dos equipos, el horario propuesto y la zona, con botones de
+aceptar y rechazar para el capitan. Los demas ven el estado en modo lectura.
+
+13.4  Carga de resultado
+
+Ya existe la funcion abrirCargarResultado en el codigo, pero quedo desconectada
+cuando se saco el selector de rival. Hay que reconectarla contra cargarResultado.
+
+Nota: el chequeo automatico de verificacion marca res-rival como "getElementById
+sin id correspondiente". Es un resto conocido de eso y es benigno.
+
+13.5  Pagina Resultados y su contador de notificaciones
+
+Ya existe el rail de navegacion con la pagina Resultados y el globito de
+notificaciones. Hay que alimentarlo con la cantidad de partidos que esperan que
+el usuario cargue o confirme un resultado.
+
+13.6  Ficha de jugador
+
+Agregar reputacion y cantidad de ausencias. La insignia de rango ya esta.
+
+
+--------------------------------------------------------------------------------
+14. FASES DE IMPLEMENTACION
+--------------------------------------------------------------------------------
+
+Entregables independientes. Cada fase deja algo que funciona y se puede probar.
+
+FASE 1  -  CIMIENTOS                                       (10 a 15 horas)
+    - Pasar el proyecto a plan Blaze
+    - Inicializar functions con TypeScript, configurar region y despliegue
+    - Reescribir las reglas de Firestore completas (seccion 5)
+    - Migrar los usuarios existentes: agregar elo=1000 y los contadores en 0
+    - Una funcion callable trivial de prueba, llamada desde el frontend
+    SE PRUEBA CON: el cliente ya no puede escribir su propio elo desde la
+    consola del navegador.
+
+FASE 2  -  COLA Y EMPAREJAMIENTO                           (20 a 30 horas)
+    - buscarPartida, cancelarBusqueda
+    - El emparejador programado
+    - Balanceo de equipos
+    - responderPropuesta
+    - UI de busqueda y de propuesta en el frontend
+    SE PRUEBA CON: dos cuentas en F5 con parties de 5, se emparejan y les
+    aparece la propuesta a los dos.
+
+FASE 3  -  RESULTADOS Y ELO                                (15 a 25 horas)
+    - cargarResultado, aplicarElo, abrirDisputa
+    - eventosElo
+    - Las tareas programadas de cierre
+    - UI de carga y confirmacion
+    SE PRUEBA CON: un partido completo de punta a punta, el ELO se mueve una
+    sola vez y queda el registro en eventosElo.
+
+FASE 4  -  REPUTACION                                      (10 a 15 horas)
+    - reportarAusencia, votarReputacion
+    - Suspensiones y recuperacion
+    - UI de votacion post-partido
+    SE PRUEBA CON: dos reportes de equipos distintos bajan la reputacion; uno
+    solo no.
+
+
+--------------------------------------------------------------------------------
+15. CRITERIOS DE ACEPTACION
+--------------------------------------------------------------------------------
+
+Para dar el trabajo por terminado, estos casos tienen que pasar:
+
+SEGURIDAD
+  [ ] Un usuario autenticado que intenta escribir su propio elo desde la consola
+      del navegador recibe PERMISSION_DENIED.
+  [ ] Lo mismo con reputacion, partidosJugados y partidosGanados.
+  [ ] Un usuario no puede leer el documento de un partido en el que no juega.
+  [ ] Llamar a buscarPartida sin sesion devuelve unauthenticated.
+  [ ] Llamar a buscarPartida siendo miembro y no host del lobby devuelve
+      permission-denied.
+
+IDEMPOTENCIA
+  [ ] Invocar aplicarElo dos veces sobre el mismo partido mueve el ELO una sola
+      vez.
+  [ ] Doble clic en confirmar resultado no duplica nada.
+
+EMPAREJAMIENTO
+  [ ] Dos parties de 5 en F5, misma zona, ventanas que se cruzan: se emparejan
+      en la corrida siguiente.
+  [ ] Parties cuyas ventanas NO se cruzan no se emparejan nunca.
+  [ ] Parties de zonas distintas no se emparejan nunca.
+  [ ] Un party de 3 + uno de 3 + uno de 4 en F5 forman un partido de 10.
+  [ ] Un party de 4 nunca queda partido entre los dos equipos.
+  [ ] Un party que espero 25 horas se empareja con cualquier ELO.
+
+ELO
+  [ ] El ejemplo numerico de la seccion 9.5 da exactamente +19, +29 y -19.
+  [ ] Un jugador con 2 partidos se mueve mas que uno con 50 en el mismo partido.
+  [ ] El ELO nunca baja de 100.
+  [ ] Cada cambio deja su documento en eventosElo.
+  [ ] rangoActual queda consistente con el elo despues de cada partido.
+
+RESULTADOS
+  [ ] Resultados coincidentes aplican el ELO.
+  [ ] Resultados distintos dejan el partido en disputa y NO tocan el ELO.
+  [ ] Un solo resultado cargado se aplica solo a las 24 horas.
+  [ ] Cero resultados a las 48 horas cancelan el partido sin efecto.
+
+REPUTACION
+  [ ] Un reporte de ausencia solo no hace nada.
+  [ ] Dos reportes de equipos distintos descuentan 15.
+  [ ] Dos reportes del MISMO equipo no alcanzan.
+  [ ] Con reputacion 45, buscarPartida devuelve failed-precondition.
+
+
+--------------------------------------------------------------------------------
+16. COSTOS
+--------------------------------------------------------------------------------
+
+El plan Blaze es pago por uso y mantiene la capa gratuita del plan Spark.
+
+Lo que consume este sistema:
+
+    Invocaciones de funciones
+        Capa gratuita: 2.000.000 por mes.
+        El emparejador cada 2 minutos = 21.600 por mes.
+        Las otras tareas programadas = menos de 2.000 por mes.
+        Las llamadas de usuarios, con cien usuarios activos, no llegan a 50.000.
+        -> Muy por debajo de la capa gratuita.
+
+    Lecturas y escrituras de Firestore
+        Capa gratuita: 50.000 lecturas y 20.000 escrituras por dia.
+        El emparejador lee hasta 100 documentos de cola por corrida:
+        hasta 72.000 lecturas por dia en el peor caso.
+        -> Puede pasarse. Mitigacion: si la cola esta vacia para una
+           combinacion de modalidad y zona, saltearla sin consultar. Con pocos
+           usuarios la mayoria de las corridas no leen nada.
+
+    Cloud Scheduler
+        3 tareas gratis por mes, despues 0,10 USD por tarea por mes.
+        Este sistema usa 5 -> unos 0,20 USD por mes.
+
+ESTIMACION REALISTA: entre 0 y 5 dolares por mes durante el primer ano.
+
+IMPORTANTE: configurar una ALERTA DE PRESUPUESTO en Google Cloud (por ejemplo a
+los 10 dolares) antes de desplegar nada. Un bucle infinito en una funcion puede
+generar una factura seria, y la alerta es gratis.
+
+
+--------------------------------------------------------------------------------
+17. ALTERNATIVA SIN CLOUD FUNCTIONS
+--------------------------------------------------------------------------------
+
+Si se decide no pasar a Blaze, el mismo diseno corre en un servidor Node comun.
+Cambia la plomeria, no la logica. Todas las secciones 4, 7, 8, 9, 10 y 11 valen
+igual.
+
+QUE CAMBIA
+
+    Servidor:      Express sobre Node 20, en Render o Railway.
+    Base:          la misma Firestore, via firebase-admin con una cuenta de
+                   servicio (archivo JSON de credenciales, que NUNCA se commitea).
+    Autenticacion: las funciones callable pasan a ser endpoints POST. El cliente
+                   manda el ID token de Firebase en el header Authorization, y
+                   el servidor lo verifica con admin.auth().verifyIdToken().
+                   Es codigo que con Cloud Functions no hay que escribir.
+    Programadas:   node-cron dentro del proceso, o el cron del hosting.
+    CORS:          hay que configurarlo. Con callable no hace falta.
+
+EL PROBLEMA REAL
+
+Las capas gratuitas de Render y Railway apagan el servicio por inactividad. El
+primer pedido despues de dormir tarda entre 30 y 60 segundos. Para el
+emparejador programado eso es fatal: si el servicio esta dormido, no corre.
+
+Se puede evitar con un ping externo cada 10 minutos (UptimeRobot, gratis), pero
+es una pieza fragil mas.
+
+Un plan pago de Render arranca en 7 dolares por mes, mas caro que la estimacion
+de Blaze y con mas trabajo de mantenimiento.
+
+RECOMENDACION: Cloud Functions, salvo que haya una razon concreta para no usarlo.
+
+
+--------------------------------------------------------------------------------
+18. DECISIONES PENDIENTES
+--------------------------------------------------------------------------------
+
+Estas quedan abiertas a proposito. Conviene resolverlas con Juan antes de
+empezar la fase correspondiente, no durante.
+
+18.1  LA CANCHA
+      El sistema empareja gente y horario, pero no reserva cancha. Opciones:
+      (a) el capitan la consigue y la carga a mano en el partido
+      (b) el sistema sugiere canchas de la zona de un listado propio
+      (c) integracion real con las canchas, a futuro
+      Para la fase 1 va (a), pero el campo cancha ya esta en el modelo.
+
+18.2  TEMPORADAS
+      Hoy el ELO es para siempre. Casi todas las plataformas competitivas
+      reinician parcialmente cada temporada (por ejemplo, llevar a todos hacia
+      1000 en un 30% al cerrar). Decidir si va, y cada cuanto.
+
+18.3  PARTIDOS ENTRE CLUBES
+      Hoy el emparejamiento es de parties, que pueden ser de amigos sueltos. Un
+      modo "club contra club", donde el ELO del club se mueve aparte del
+      individual, es una funcionalidad entera y queda fuera de este documento.
+
+18.4  VALOR DE LA GOLEADA
+      El multiplicador de la seccion 9.1 es una propuesta. Hay que verlo con
+      datos reales: si los partidos amateur terminan sistematicamente 8-5, el
+      tope de 1.5 se alcanza siempre y deja de discriminar.
+
+18.5  QUIEN RESUELVE LAS DISPUTAS
+      Por ahora es manual y no hay herramienta. Hace falta como minimo una
+      pagina interna que liste los partidos disputados y permita fijar el
+      resultado. No esta presupuestada en las 4 fases.
+
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================
